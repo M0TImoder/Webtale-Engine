@@ -701,8 +701,67 @@ pub fn heart_defeated_update(
                         ));
                     }
 
+                    commands.spawn((
+                        GameOverSequence {
+                            timer: Timer::from_seconds(1.0, TimerMode::Once),
+                            state: GameOverSequenceState::Delay,
+                        },
+                        Cleanup,
+                    ));
+
                     commands.entity(entity).despawn();
                 }
+            }
+        }
+    }
+}
+
+pub fn game_over_sequence_update(
+    mut commands: Commands,
+    time: Res<Time>,
+    asset_server: Res<AssetServer>,
+    mut query: Query<&mut GameOverSequence>,
+    mut logo_query: Query<&mut Sprite, With<GameOverLogo>>,
+) {
+    for mut sequence in query.iter_mut() {
+        sequence.timer.tick(time.delta());
+
+        match sequence.state {
+            GameOverSequenceState::Delay => {
+                if sequence.timer.finished() {
+                    sequence.state = GameOverSequenceState::FadeIn;
+                    sequence.timer = Timer::from_seconds(1.0, TimerMode::Once);
+
+                    commands.spawn((
+                        SpriteBundle {
+                            texture: asset_server.load("spr_gameoverbg.png"),
+                            sprite: Sprite {
+                                color: Color::rgba(1.0, 1.0, 1.0, 0.0),
+                                ..default()
+                            },
+                            transform: Transform::from_xyz(0.0, 100.0, 700.0), 
+                            ..default()
+                        },
+                        GameOverLogo,
+                        Cleanup,
+                    ));
+                }
+            },
+            GameOverSequenceState::FadeIn => {
+                let alpha = sequence.timer.fraction();
+                for mut sprite in logo_query.iter_mut() {
+                    sprite.color.set_a(alpha);
+                }
+
+                if sequence.timer.finished() {
+                    sequence.state = GameOverSequenceState::Finished;
+                    for mut sprite in logo_query.iter_mut() {
+                        sprite.color.set_a(1.0);
+                    }
+                }
+            },
+            GameOverSequenceState::Finished => {
+                // 完了後の処理
             }
         }
     }

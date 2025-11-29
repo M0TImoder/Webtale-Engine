@@ -77,3 +77,18 @@ pub struct HeartShard {
     pub velocity: Vec3,
     pub gravity: f32,
 }
+
+#[derive(Component)]
+pub struct GameOverSequence {
+    pub timer: Timer,
+    pub state: GameOverSequenceState,
+}
+
+pub enum GameOverSequenceState {
+    Delay,      // 破片が飛び散った後の待機
+    FadeIn,     // ロゴのフェードイン
+    Finished,   // 完了
+}
+
+#[derive(Component)]
+pub struct GameOverLogo;

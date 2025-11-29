@@ -60,6 +60,7 @@ fn main() {
             combat::soul_collision_detection,
             combat::heart_defeated_update,
             combat::heart_shard_update,
+            combat::game_over_sequence_update,
         ))
         .run();
 }
