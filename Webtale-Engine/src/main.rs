@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy::window::WindowMode;
+use bevy::asset::AssetMetaCheck;
 
 mod constants;
 mod components;
@@ -7,24 +7,26 @@ mod resources;
 mod systems;
 
 use constants::*;
-use components::*;
 use resources::*;
 use systems::*;
 
 fn main() {
     App::new()
+        .insert_resource(AssetMetaCheck::Never)
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         resolution: (WINDOW_WIDTH, WINDOW_HEIGHT).into(),
-                        title: "Undertale Engine Recreation".to_string(),
+                        title: "Webtale Engine".to_string(),
                         resizable: true,
+                        canvas: Some("#bevy".to_string()),
+                        prevent_default_event_handling: false,
                         ..default()
                     }),
                     ..default()
                 })
-                .set(ImagePlugin::default_nearest()), 
+                .set(ImagePlugin::default_nearest()),
         )
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(BattleBox {

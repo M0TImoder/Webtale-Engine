@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
-use rand::Rng;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;

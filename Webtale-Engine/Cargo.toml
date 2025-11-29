@@ -5,4 +5,14 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.13"
-rand = "0.9.2"
+rand = "0.8"
+web-sys = { version = "0.3", features = ["console"] }
+console_error_panic_hook = "0.1"
+uuid = { version = "1.18", features = ["v4", "js"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

@@ -39,7 +39,8 @@ pub fn battle_flow_control(
                 Cleanup,
             ));
             let messages = ["Ribbit, ribbit.", "Croak.", "Hop, hop."];
-            let msg = messages[rand::rng().random_range(0..messages.len())];
+            // 修正箇所: rand::thread_rng().gen_range を使用
+            let msg = messages[rand::thread_rng().gen_range(0..messages.len())];
             commands.spawn((
                 Text2dBundle {
                     text: Text::from_section("", TextStyle { font: game_fonts.dialog.clone(), font_size: 24.0, color: Color::BLACK }),
@@ -145,11 +146,12 @@ pub fn leapfrog_bullet_update(
                     bullet.state = LeapFrogState::Jumping;
                     *texture = asset_server.load("spr_frogbullet_go.png");
                     
-                    let mut rng = rand::rng();
-                    let dir_deg = 145.0 - rng.random_range(0.0..20.0);
+                    // 修正: rand::thread_rng().gen_range
+                    let mut rng = rand::thread_rng();
+                    let dir_deg = 145.0 - rng.gen_range(0.0..20.0);
                     let dir_rad = dir_deg * (PI / 180.0);
                     
-                    let speed = (7.0 + rng.random_range(0.0..3.0)) * 30.0;
+                    let speed = (7.0 + rng.gen_range(0.0..3.0)) * 30.0;
                     
                     let vx = speed * dir_rad.cos(); 
                     let vy = speed * dir_rad.sin();
@@ -509,9 +511,10 @@ pub fn vaporize_enemy_system(
                         0.1
                     );
 
-                    let velocity_x = rand::rng().random_range(-80.0..80.0);
-                    let velocity_y = rand::rng().random_range(20.0..80.0);
-                    let max_alpha = rand::rng().random_range(0.2..1.0);
+                    // 修正: rand::thread_rng().gen_range
+                    let velocity_x = rand::thread_rng().gen_range(-80.0..80.0);
+                    let velocity_y = rand::thread_rng().gen_range(20.0..80.0);
+                    let max_alpha = rand::thread_rng().gen_range(0.2..1.0);
 
                     commands.spawn((
                         SpriteBundle {
@@ -595,6 +598,7 @@ pub fn soul_collision_detection(
             let distance = soul_tf.translation.distance(bullet_tf.translation);
             if distance < (soul_radius + bullet_radius) {
                 game_state.hp -= bullet.damage as f32;
+                
                 game_state.invincibility_timer = 0.5;
 
                 if game_state.hp <= 0.0 { 
@@ -609,7 +613,7 @@ pub fn soul_collision_detection(
                     }
 
                     commands.entity(soul_entity).despawn();
-                    
+
                     commands.spawn((
                         SpriteBundle {
                             sprite: Sprite {
@@ -707,15 +711,16 @@ pub fn heart_defeated_update(
                     ];
 
                     for offset in offsets.iter() {
-                        let mut rng = rand::rng();
-                        let direction_deg = rng.random_range(0.0..360.0);
+                        // 修正: rand::thread_rng()
+                        let mut rng = rand::thread_rng();
+                        let direction_deg = rng.gen_range(0.0..360.0);
                         let direction_rad = direction_deg * PI / 180.0;
                         let speed = 7.0 * 30.0;
                         
                         let vx = speed * direction_rad.cos();
                         let vy = speed * direction_rad.sin(); 
 
-                        let shard_index = rng.random_range(0..4);
+                        let shard_index = rng.gen_range(0..4);
                         let texture_path = format!("spr_heartshards_{}.png", shard_index);
 
                         commands.spawn((
