@@ -583,6 +583,10 @@ pub fn soul_collision_detection(
         Query<&mut Visibility, (With<Text>, Without<Soul>)>,
     )>,
 ) {
+    if game_state.invincibility_timer > 0.0 {
+        return;
+    }
+
     if let Ok((soul_entity, soul_tf)) = soul_query.get_single_mut() {
         let soul_radius = 6.0;
         let bullet_radius = 10.0;
@@ -591,7 +595,8 @@ pub fn soul_collision_detection(
             let distance = soul_tf.translation.distance(bullet_tf.translation);
             if distance < (soul_radius + bullet_radius) {
                 game_state.hp -= bullet.damage as f32;
-                
+                game_state.invincibility_timer = 0.5;
+
                 if game_state.hp <= 0.0 { 
                     game_state.hp = 0.0; 
                     game_state.mnfight = 99;
@@ -604,7 +609,7 @@ pub fn soul_collision_detection(
                     }
 
                     commands.entity(soul_entity).despawn();
-
+                    
                     commands.spawn((
                         SpriteBundle {
                             sprite: Sprite {
@@ -638,6 +643,32 @@ pub fn soul_collision_detection(
                     ));
                     
                     break;
+                }
+            }
+        }
+    }
+}
+
+pub fn invincibility_update(
+    time: Res<Time>,
+    mut game_state: ResMut<GameState>,
+    mut soul_query: Query<&mut Visibility, With<Soul>>,
+) {
+    if game_state.invincibility_timer > 0.0 {
+        game_state.invincibility_timer -= time.delta_seconds();
+
+        if let Ok(mut visibility) = soul_query.get_single_mut() {
+            if game_state.invincibility_timer <= 0.0 {
+                game_state.invincibility_timer = 0.0;
+                *visibility = Visibility::Inherited;
+            } else {
+                let blink_interval = 1.0 / 15.0; 
+                let blink_state = (game_state.invincibility_timer / blink_interval).ceil() as i32;
+                
+                if blink_state % 2 == 0 {
+                    *visibility = Visibility::Hidden;
+                } else {
+                    *visibility = Visibility::Inherited;
                 }
             }
         }

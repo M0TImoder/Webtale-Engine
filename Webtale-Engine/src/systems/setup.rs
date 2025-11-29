@@ -60,6 +60,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         bubble_timer: Timer::from_seconds(3.0, TimerMode::Once),
         damage_display_timer: Timer::from_seconds(1.0, TimerMode::Once),
         turntimer: -1.0,
+        invincibility_timer: 0.0,
     });
 
     let enemy_base_x = 320.0; 

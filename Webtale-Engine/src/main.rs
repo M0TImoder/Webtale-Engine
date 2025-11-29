@@ -58,6 +58,7 @@ fn main() {
             combat::leapfrog_bullet_update,
             combat::combat_turn_manager,
             combat::soul_collision_detection,
+            combat::invincibility_update,
             combat::heart_defeated_update,
             combat::heart_shard_update,
             combat::game_over_sequence_update,

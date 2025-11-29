@@ -26,6 +26,8 @@ pub struct GameState {
     pub damage_display_timer: Timer,
 
     pub turntimer: f32,
+    
+    pub invincibility_timer: f32,
 }
 
 #[derive(Resource)]
