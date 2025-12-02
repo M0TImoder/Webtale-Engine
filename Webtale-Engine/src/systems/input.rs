@@ -32,6 +32,12 @@ pub fn handle_global_input(
         for entity in cleanup_query.iter() {
             commands.entity(entity).despawn_recursive();
         }
+
+        commands.insert_resource(BattleBox {
+            current: Rect::new(32.0, 250.0, 602.0, 385.0),
+            target: Rect::new(32.0, 250.0, 602.0, 385.0),
+        });
+
         spawn_game_objects(&mut commands, &asset_server, &game_fonts);
     }
 }

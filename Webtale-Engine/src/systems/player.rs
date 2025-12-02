@@ -7,14 +7,14 @@ pub fn soul_position_sync(
     game_state: Res<GameState>,
     mut soul_query: Query<&mut Transform, With<Soul>>,
 ) {
-    if game_state.mnfight != 0 && game_state.mnfight != 2 && game_state.myfight == 0 { 
+    if (game_state.mnfight != 0 && game_state.mnfight != 2) || game_state.myfight != 0 { 
         if let Ok(mut t) = soul_query.get_single_mut() {
             t.translation = gml_to_bevy(-200.0, 0.0); 
         }
         return; 
     }
     
-    if game_state.mnfight == 2 || game_state.myfight != 0 {
+    if game_state.mnfight == 2 {
         return;
     }
 
