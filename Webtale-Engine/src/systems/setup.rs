@@ -244,18 +244,19 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
 }
 
 pub fn camera_scaling_system(
-    window_query: Query<&Window>,
+    window_query: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut projection_query: Query<&mut OrthographicProjection, With<MainCamera>>,
 ) {
-    let window = window_query.single();
-    if let Ok(mut projection) = projection_query.get_single_mut() {
-        let target_ratio = 640.0 / 480.0;
-        let window_ratio = window.width() / window.height();
+    if let Ok(window) = window_query.get_single() {
+        if let Ok(mut projection) = projection_query.get_single_mut() {
+            let target_ratio = 640.0 / 480.0;
+            let window_ratio = window.width() / window.height();
 
-        if window_ratio > target_ratio {
-            projection.scaling_mode = bevy::render::camera::ScalingMode::FixedVertical(480.0);
-        } else {
-            projection.scaling_mode = bevy::render::camera::ScalingMode::FixedHorizontal(640.0);
+            if window_ratio > target_ratio {
+                projection.scaling_mode = bevy::render::camera::ScalingMode::FixedVertical(480.0);
+            } else {
+                projection.scaling_mode = bevy::render::camera::ScalingMode::FixedHorizontal(640.0);
+            }
         }
     }
 }

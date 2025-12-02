@@ -92,3 +92,6 @@ pub enum GameOverSequenceState {
 
 #[derive(Component)]
 pub struct GameOverLogo;
+
+#[derive(Component)]
+pub struct EditorWindow;

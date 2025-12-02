@@ -6,39 +6,126 @@ use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
 use crate::systems::setup::spawn_game_objects; 
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
+use bevy::render::view::RenderLayers;
+use bevy::render::camera::RenderTarget;
+use bevy::window::WindowRef;
 
 pub fn handle_global_input(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
-    mut window_query: Query<&mut Window>,
+    mut window_query: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
     mut exit_writer: EventWriter<AppExit>,
     asset_server: Res<AssetServer>,
     game_fonts: Res<GameFonts>,
     cleanup_query: Query<Entity, With<Cleanup>>,
+    editor_window_query: Query<Entity, With<EditorWindow>>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     if input.just_pressed(KeyCode::Escape) {
         exit_writer.send(AppExit::default());
     }
 
     if (input.pressed(KeyCode::AltLeft) || input.pressed(KeyCode::AltRight)) && input.just_pressed(KeyCode::Enter) {
-        let mut window = window_query.single_mut();
-        window.mode = match window.mode {
-            WindowMode::Windowed => WindowMode::BorderlessFullscreen,
-            _ => WindowMode::Windowed,
-        };
+        if let Ok(mut window) = window_query.get_single_mut() {
+             window.mode = match window.mode {
+                WindowMode::Windowed => WindowMode::BorderlessFullscreen,
+                _ => WindowMode::Windowed,
+            };
+        }
     }
 
     if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyR) {
         for entity in cleanup_query.iter() {
             commands.entity(entity).despawn_recursive();
         }
-
+        
         commands.insert_resource(BattleBox {
             current: Rect::new(32.0, 250.0, 602.0, 385.0),
             target: Rect::new(32.0, 250.0, 602.0, 385.0),
         });
 
         spawn_game_objects(&mut commands, &asset_server, &game_fonts);
+    }
+
+    if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyE) {
+        if editor_window_query.is_empty() {
+            let editor_window = commands.spawn((
+                Window {
+                    title: "Danmaku Editor".to_string(),
+                    resolution: (1280.0, 720.0).into(),
+                    resizable: true,
+                    prevent_default_event_handling: false, 
+                    ..default()
+                },
+                EditorWindow,
+            )).id();
+
+            let size = Extent3d {
+                width: 640,
+                height: 480,
+                ..default()
+            };
+            let mut image = Image {
+                texture_descriptor: bevy::render::render_resource::TextureDescriptor {
+                    label: Some("Preview Texture"),
+                    size,
+                    dimension: TextureDimension::D2,
+                    format: TextureFormat::Bgra8UnormSrgb,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    usage: TextureUsages::TEXTURE_BINDING
+                        | TextureUsages::COPY_DST
+                        | TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                },
+                ..default()
+            };
+            image.resize(size);
+            let image_handle = images.add(image);
+
+            commands.spawn((
+                Camera2dBundle {
+                    camera: Camera {
+                        target: RenderTarget::Image(image_handle.clone()),
+                        order: -1,
+                        ..default()
+                    },
+                    projection: OrthographicProjection {
+                        scaling_mode: bevy::render::camera::ScalingMode::FixedVertical(480.0),
+                        ..default()
+                    },
+                    transform: Transform::from_xyz(0.0, 0.0, 999.9), 
+                    ..default()
+                },
+                RenderLayers::layer(0),
+                EditorWindow, 
+            ));
+
+            commands.spawn((
+                Camera2dBundle {
+                    camera: Camera {
+                        target: RenderTarget::Window(WindowRef::Entity(editor_window)),
+                        clear_color: ClearColorConfig::Custom(Color::hex("222222").unwrap()), 
+                        ..default()
+                    },
+                    transform: Transform::from_xyz(0.0, 0.0, 999.9),
+                    ..default()
+                },
+                RenderLayers::layer(1),
+                EditorWindow,
+            ));
+
+            commands.spawn((
+                SpriteBundle {
+                    texture: image_handle,
+                    transform: Transform::from_xyz(0.0, 110.0, 0.0), 
+                    ..default()
+                },
+                RenderLayers::layer(1),
+                EditorWindow,
+            ));
+        }
     }
 }
 
