@@ -33,6 +33,11 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         max_hp: 20.0,
         lv: 1,
         name: "CHARA".to_string(),
+        
+        speed: 150.0,
+        attack: 20.0,
+        invincibility_duration: 1.0,
+
         enemy_hp: 30,
         enemy_max_hp: 30,
         enemy_def: 0,
@@ -177,6 +182,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
             transform: Transform::from_translation(gml_to_bevy(lv_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
         },
+        LvText,
         Cleanup,
     ));
 

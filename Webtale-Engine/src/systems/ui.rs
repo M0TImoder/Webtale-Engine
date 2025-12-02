@@ -189,16 +189,23 @@ pub fn draw_ui_status(
     game_state: Res<GameState>,
     mut red_bar: Query<&mut Sprite, (With<HpBarRed>, Without<HpBarYellow>)>,
     mut yel_bar: Query<&mut Sprite, (With<HpBarYellow>, Without<HpBarRed>)>,
-    mut text: Query<(&mut Text, &mut Transform), With<HpText>>,
+    mut hp_text_query: Query<(&mut Text, &mut Transform), (With<HpText>, Without<LvText>)>,
+    mut lv_text_query: Query<&mut Text, (With<LvText>, Without<HpText>)>,
 ) {
     let bar_scale = 1.2; let height = 20.0;   
+    
     if let Ok(mut s) = red_bar.get_single_mut() { s.custom_size = Some(Vec2::new(game_state.max_hp * bar_scale, height)); }
     if let Ok(mut s) = yel_bar.get_single_mut() { s.custom_size = Some(Vec2::new(game_state.hp * bar_scale, height)); }
-    if let Ok((mut t, mut trans)) = text.get_single_mut() {
+    
+    if let Ok((mut t, mut trans)) = hp_text_query.get_single_mut() {
         t.sections[0].value = format!("{:.0} / {:.0}", game_state.hp, game_state.max_hp);
         let visual_hp_bar_x = 250.0;
         let text_x = visual_hp_bar_x + (game_state.max_hp * bar_scale) + 15.0;
         trans.translation = gml_to_bevy(text_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT);
+    }
+
+    if let Ok(mut t) = lv_text_query.get_single_mut() {
+        t.sections[0].value = format!("LV {}", game_state.lv);
     }
 }
 

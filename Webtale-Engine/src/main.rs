@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::asset::AssetMetaCheck;
+use bevy_egui::EguiPlugin;
 
 mod constants;
 mod components;
@@ -28,6 +29,7 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest()),
         )
+        .add_plugins(EguiPlugin)
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(BattleBox {
             current: Rect::new(32.0, 250.0, 602.0, 385.0),
@@ -47,6 +49,7 @@ fn main() {
             ui::update_button_sprites,
             ui::animate_text,
             ui::animate_enemy_head, 
+            editor::editor_ui_system,
         ))
         .add_systems(Update, (
             combat::battle_flow_control,

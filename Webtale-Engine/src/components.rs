@@ -19,6 +19,7 @@ pub struct ButtonVisual {
 #[derive(Component)] pub struct HpBarRed;
 #[derive(Component)] pub struct HpBarYellow;
 #[derive(Component)] pub struct HpText;
+#[derive(Component)] pub struct LvText;
 
 #[derive(Component)]
 pub struct Typewriter {

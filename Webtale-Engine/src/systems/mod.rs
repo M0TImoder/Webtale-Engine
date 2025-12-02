@@ -3,3 +3,4 @@ pub mod input;
 pub mod player;
 pub mod ui;
 pub mod combat;
+pub mod editor;

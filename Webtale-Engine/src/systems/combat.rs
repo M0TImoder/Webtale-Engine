@@ -39,7 +39,6 @@ pub fn battle_flow_control(
                 Cleanup,
             ));
             let messages = ["Ribbit, ribbit.", "Croak.", "Hop, hop."];
-            // 修正箇所: rand::thread_rng().gen_range を使用
             let msg = messages[rand::thread_rng().gen_range(0..messages.len())];
             commands.spawn((
                 Text2dBundle {
@@ -146,7 +145,6 @@ pub fn leapfrog_bullet_update(
                     bullet.state = LeapFrogState::Jumping;
                     *texture = asset_server.load("spr_frogbullet_go.png");
                     
-                    // 修正: rand::thread_rng().gen_range
                     let mut rng = rand::thread_rng();
                     let dir_deg = 145.0 - rng.gen_range(0.0..20.0);
                     let dir_rad = dir_deg * (PI / 180.0);
@@ -212,7 +210,8 @@ pub fn attack_bar_update(
                 
                 let distance = (transform.translation.x - box_center_x).abs();
                 
-                let base_damage = 20.0;
+                let base_damage = game_state.attack;
+                
                 let damage = if distance < 12.0 {
                     (base_damage * 2.2) as i32 
                 } else {
@@ -511,10 +510,10 @@ pub fn vaporize_enemy_system(
                         0.1
                     );
 
-                    // 修正: rand::thread_rng().gen_range
-                    let velocity_x = rand::thread_rng().gen_range(-80.0..80.0);
-                    let velocity_y = rand::thread_rng().gen_range(20.0..80.0);
-                    let max_alpha = rand::thread_rng().gen_range(0.2..1.0);
+                    let mut rng = rand::thread_rng();
+                    let velocity_x = rng.gen_range(-80.0..80.0);
+                    let velocity_y = rng.gen_range(20.0..80.0);
+                    let max_alpha = rng.gen_range(0.2..1.0);
 
                     commands.spawn((
                         SpriteBundle {
@@ -582,8 +581,8 @@ pub fn soul_collision_detection(
     mut soul_query: Query<(Entity, &Transform), With<Soul>>,
     bullet_query: Query<(&Transform, &LeapFrogBullet)>,
     mut visibility_param_set: ParamSet<(
-        Query<&mut Visibility, (With<Sprite>, Without<Soul>)>,
-        Query<&mut Visibility, (With<Text>, Without<Soul>)>,
+        Query<&mut Visibility, (With<Sprite>, Without<Soul>, Without<EditorWindow>)>,
+        Query<&mut Visibility, (With<Text>, Without<Soul>, Without<EditorWindow>)>,
     )>,
 ) {
     if game_state.invincibility_timer > 0.0 {
@@ -599,7 +598,7 @@ pub fn soul_collision_detection(
             if distance < (soul_radius + bullet_radius) {
                 game_state.hp -= bullet.damage as f32;
                 
-                game_state.invincibility_timer = 0.5;
+                game_state.invincibility_timer = game_state.invincibility_duration;
 
                 if game_state.hp <= 0.0 { 
                     game_state.hp = 0.0; 
@@ -652,7 +651,6 @@ pub fn soul_collision_detection(
         }
     }
 }
-
 pub fn invincibility_update(
     time: Res<Time>,
     mut game_state: ResMut<GameState>,
@@ -711,7 +709,6 @@ pub fn heart_defeated_update(
                     ];
 
                     for offset in offsets.iter() {
-                        // 修正: rand::thread_rng()
                         let mut rng = rand::thread_rng();
                         let direction_deg = rng.gen_range(0.0..360.0);
                         let direction_rad = direction_deg * PI / 180.0;

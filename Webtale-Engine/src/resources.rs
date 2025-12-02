@@ -6,6 +6,10 @@ pub struct GameState {
     pub max_hp: f32,
     pub lv: i32,
     pub name: String,
+
+    pub speed: f32,
+    pub attack: f32,
+    pub invincibility_duration: f32,
     
     pub enemy_hp: i32,
     pub enemy_max_hp: i32,

@@ -67,7 +67,9 @@ pub fn soul_combat_movement(
     if game_state.mnfight != 2 { return; }
 
     let mut transform = query.single_mut();
-    let speed = 150.0;
+    
+    let speed = game_state.speed;
+    
     let delta = speed * time.delta_seconds();
     let mut move_vec = Vec3::ZERO;
 
