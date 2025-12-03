@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_egui::EguiContexts;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
@@ -63,7 +64,15 @@ pub fn soul_combat_movement(
     game_state: Res<GameState>,
     battle_box: Res<BattleBox>,
     mut query: Query<&mut Transform, With<Soul>>,
+    mut egui_contexts: EguiContexts,
+    editor_query: Query<Entity, With<EditorWindow>>,
 ) {
+    if let Ok(editor_entity) = editor_query.get_single() {
+        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+            return;
+        }
+    }
+
     if game_state.mnfight != 2 { return; }
 
     let mut transform = query.single_mut();

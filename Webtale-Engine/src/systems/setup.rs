@@ -10,10 +10,10 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         MainCamera,
     ));
 
-    let font_main = asset_server.load("Mars_Needs_Cunnilingus.ttf");
-    let font_dialog = asset_server.load("8bitOperatorPlus-Bold.ttf");
-    let font_hp_label = asset_server.load("8-BIT_WO.ttf");
-    let font_damage = asset_server.load("hachicro.TTF");
+    let font_main = asset_server.load("font/Mars_Needs_Cunnilingus.ttf");
+    let font_dialog = asset_server.load("font/8bitOperatorPlus-Bold.ttf");
+    let font_hp_label = asset_server.load("font/8-BIT_WO.ttf");
+    let font_damage = asset_server.load("font/hachicro.TTF");
 
     let game_fonts = GameFonts {
         main: font_main.clone(),
@@ -74,7 +74,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
 
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load("spr_froglegs_0.png"),
+            texture: asset_server.load("enemy/spr_froglegs_0.png"),
             sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
                 translation: gml_to_bevy(enemy_base_x, enemy_base_y) + Vec3::new(0.0, 0.0, Z_ENEMY_BODY),
@@ -94,7 +94,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     let head_pos = gml_to_bevy(enemy_base_x, enemy_base_y - head_y_offset);
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load("spr_froghead_0.png"),
+            texture: asset_server.load("enemy/spr_froghead_0.png"),
             sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
                 translation: head_pos + Vec3::new(0.0, 0.0, Z_ENEMY_HEAD),
@@ -110,7 +110,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
 
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load("spr_heart_0.png"), 
+            texture: asset_server.load("heart/spr_heart_0.png"), 
             sprite: Sprite { color: Color::WHITE, custom_size: Some(Vec2::new(16.0, 16.0)), ..default() },
             transform: Transform::from_translation(gml_to_bevy(0.0, 0.0) + Vec3::new(0.0, 0.0, Z_SOUL)),
             ..default()
@@ -120,10 +120,10 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     ));
 
     let buttons = [
-        (BTN_FIGHT_X, "spr_fightbt_0.png", "spr_fightbt_1.png", 0),
-        (BTN_ACT_X,   "spr_actbt_center_0.png", "spr_actbt_center_1.png", 1),
-        (BTN_ITEM_X,  "spr_itembt_0.png",  "spr_itembt_1.png",  2),
-        (BTN_MERCY_X, "spr_sparebt_0.png", "spr_sparebt_1.png", 3),
+        (BTN_FIGHT_X, "button/spr_fightbt_0.png", "button/spr_fightbt_1.png", 0),
+        (BTN_ACT_X,   "button/spr_actbt_center_0.png", "button/spr_actbt_center_1.png", 1),
+        (BTN_ITEM_X,  "button/spr_itembt_0.png",  "button/spr_itembt_1.png",  2),
+        (BTN_MERCY_X, "button/spr_sparebt_0.png", "button/spr_sparebt_1.png", 3),
     ];
 
     for (x, normal_path, selected_path, idx) in buttons {
@@ -171,6 +171,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
             transform: Transform::from_translation(gml_to_bevy(30.0, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
         },
+        PlayerNameText,
         Cleanup,
     ));
 

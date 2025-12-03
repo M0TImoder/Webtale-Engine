@@ -2,14 +2,16 @@ use bevy::prelude::*;
 use bevy::window::WindowMode;
 use bevy::app::AppExit;
 use bevy::sprite::Anchor;
-use crate::components::*;
-use crate::resources::*;
-use crate::constants::*;
-use crate::systems::setup::spawn_game_objects; 
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
 use bevy::render::view::RenderLayers;
 use bevy::render::camera::RenderTarget;
 use bevy::window::WindowRef;
+use bevy_egui::EguiContexts;
+
+use crate::components::*;
+use crate::resources::*;
+use crate::constants::*;
+use crate::systems::setup::spawn_game_objects; 
 
 pub fn handle_global_input(
     mut commands: Commands,
@@ -19,8 +21,10 @@ pub fn handle_global_input(
     asset_server: Res<AssetServer>,
     game_fonts: Res<GameFonts>,
     cleanup_query: Query<Entity, With<Cleanup>>,
-    editor_window_query: Query<Entity, With<EditorWindow>>,
+    all_editor_entities: Query<Entity, With<EditorWindow>>, 
+    open_editor_window_query: Query<Entity, (With<EditorWindow>, With<Window>)>, 
     mut images: ResMut<Assets<Image>>,
+    mut egui_contexts: EguiContexts,
 ) {
     if input.just_pressed(KeyCode::Escape) {
         exit_writer.send(AppExit::default());
@@ -36,20 +40,34 @@ pub fn handle_global_input(
     }
 
     if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyR) {
-        for entity in cleanup_query.iter() {
-            commands.entity(entity).despawn_recursive();
+        let mut is_typing = false;
+        if let Ok(editor_entity) = open_editor_window_query.get_single() {
+            let ctx = egui_contexts.ctx_for_window_mut(editor_entity);
+            if ctx.wants_keyboard_input() {
+                is_typing = true;
+            }
         }
-        
-        commands.insert_resource(BattleBox {
-            current: Rect::new(32.0, 250.0, 602.0, 385.0),
-            target: Rect::new(32.0, 250.0, 602.0, 385.0),
-        });
 
-        spawn_game_objects(&mut commands, &asset_server, &game_fonts);
+        if !is_typing {
+            for entity in cleanup_query.iter() {
+                commands.entity(entity).despawn_recursive();
+            }
+            
+            commands.insert_resource(BattleBox {
+                current: Rect::new(32.0, 250.0, 602.0, 385.0),
+                target: Rect::new(32.0, 250.0, 602.0, 385.0),
+            });
+
+            spawn_game_objects(&mut commands, &asset_server, &game_fonts);
+        }
     }
 
     if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyE) {
-        if editor_window_query.is_empty() {
+        if open_editor_window_query.is_empty() {
+            for entity in all_editor_entities.iter() {
+                commands.entity(entity).despawn_recursive();
+            }
+
             let editor_window = commands.spawn((
                 Window {
                     title: "Danmaku Editor".to_string(),
@@ -136,8 +154,16 @@ pub fn menu_input_system(
     mut game_state: ResMut<GameState>,
     mut typewriter_query: Query<(Entity, &mut Typewriter), With<MainDialogText>>,
     act_commands_query: Query<&ActCommands, With<EnemyBody>>,
-    menu_items_query: Query<Entity, With<MenuTextItem>>, 
+    menu_items_query: Query<Entity, With<MenuTextItem>>,
+    mut egui_contexts: EguiContexts,
+    editor_query: Query<Entity, With<EditorWindow>>,
 ) {
+    if let Ok(editor_entity) = editor_query.get_single() {
+        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+            return;
+        }
+    }
+
     if game_state.mnfight != 0 || game_state.myfight != 0 { return; }
     let layer = game_state.menu_layer;
     let cursor_idx = game_state.menu_coords[layer as usize] as usize;
@@ -216,7 +242,7 @@ pub fn menu_input_system(
                 let box_center = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
                 commands.spawn((
                     SpriteBundle {
-                        texture: asset_server.load("spr_target.png"),
+                        texture: asset_server.load("attack/spr_target.png"),
                         sprite: Sprite { custom_size: Some(Vec2::new(566.0, 120.0)), ..default() },
                         transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, Z_ATTACK_TARGET)),
                         ..default()
@@ -227,7 +253,7 @@ pub fn menu_input_system(
                 let bar_start_x = gml_to_bevy(32.0, 0.0).x;
                 commands.spawn((
                     SpriteBundle {
-                        texture: asset_server.load("spr_targetchoice_1.png"),
+                        texture: asset_server.load("attack/spr_targetchoice_1.png"),
                         sprite: Sprite { custom_size: Some(Vec2::new(14.0, 120.0)), ..default() },
                         transform: Transform::from_translation(Vec3::new(bar_start_x, box_center.y, Z_ATTACK_BAR)),
                         ..default()
@@ -267,7 +293,7 @@ pub fn menu_input_system(
                 
                 commands.spawn((
                     Text2dBundle {
-                        text: Text::from_section("", TextStyle { font: asset_server.load("8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
+                        text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
                         text_anchor: Anchor::TopLeft,
                         transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                         ..default()
@@ -291,7 +317,7 @@ pub fn menu_input_system(
                     
                     commands.spawn((
                         Text2dBundle {
-                            text: Text::from_section("", TextStyle { font: asset_server.load("8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
+                            text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
                             text_anchor: Anchor::TopLeft,
                             transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                             ..default()
@@ -316,7 +342,7 @@ pub fn menu_input_system(
 
                 commands.spawn((
                     Text2dBundle {
-                        text: Text::from_section("", TextStyle { font: asset_server.load("8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
+                        text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
                         text_anchor: Anchor::TopLeft,
                         transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                         ..default()

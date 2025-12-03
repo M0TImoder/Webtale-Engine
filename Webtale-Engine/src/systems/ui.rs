@@ -191,6 +191,7 @@ pub fn draw_ui_status(
     mut yel_bar: Query<&mut Sprite, (With<HpBarYellow>, Without<HpBarRed>)>,
     mut hp_text_query: Query<(&mut Text, &mut Transform), (With<HpText>, Without<LvText>)>,
     mut lv_text_query: Query<&mut Text, (With<LvText>, Without<HpText>)>,
+    mut name_text_query: Query<&mut Text, (With<PlayerNameText>, Without<HpText>, Without<LvText>)>,
 ) {
     let bar_scale = 1.2; let height = 20.0;   
     
@@ -206,6 +207,10 @@ pub fn draw_ui_status(
 
     if let Ok(mut t) = lv_text_query.get_single_mut() {
         t.sections[0].value = format!("LV {}", game_state.lv);
+    }
+
+    if let Ok(mut t) = name_text_query.get_single_mut() {
+        t.sections[0].value = game_state.name.clone();
     }
 }
 

@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use rand::Rng;
 use std::f32::consts::PI;
+use bevy_egui::EguiContexts;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
@@ -17,7 +18,15 @@ pub fn battle_flow_control(
     bubbles: Query<Entity, With<SpeechBubble>>,
     bubble_text_query: Query<&Typewriter, With<SpeechBubble>>, 
     mut soul_query: Query<&mut Transform, With<Soul>>,
+    mut egui_contexts: EguiContexts,
+    editor_query: Query<Entity, With<EditorWindow>>,
 ) {
+    if let Ok(editor_entity) = editor_query.get_single() {
+        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+            return;
+        }
+    }
+
     if game_state.mnfight == 1 {
         if bubbles.is_empty() {
             box_res.target = Rect::new(32.0, 250.0, 602.0, 385.0);
@@ -25,7 +34,7 @@ pub fn battle_flow_control(
             let bubble_y = 160.0 - 95.0; 
             commands.spawn((
                 SpriteBundle {
-                    texture: asset_server.load("spr_blconsm.png"), 
+                    texture: asset_server.load("blcon/spr_blconsm.png"), 
                     sprite: Sprite { 
                         color: Color::WHITE, 
                         custom_size: Some(Vec2::new(100.0, 80.0)), 
@@ -94,7 +103,7 @@ pub fn combat_turn_manager(
             
             commands.spawn((
                 SpriteBundle {
-                    texture: asset_server.load("spr_frogbullet_stop.png"),
+                    texture: asset_server.load("enemy/spr_frogbullet_stop.png"),
                     transform: Transform::from_xyz(spawn_x, spawn_y, 30.0).with_scale(Vec3::splat(1.0)),
                     ..default()
                 },
@@ -143,7 +152,7 @@ pub fn leapfrog_bullet_update(
                 bullet.timer.tick(time.delta());
                 if bullet.timer.finished() {
                     bullet.state = LeapFrogState::Jumping;
-                    *texture = asset_server.load("spr_frogbullet_go.png");
+                    *texture = asset_server.load("enemy/spr_frogbullet_go.png");
                     
                     let mut rng = rand::thread_rng();
                     let dir_deg = 145.0 - rng.gen_range(0.0..20.0);
@@ -183,7 +192,15 @@ pub fn attack_bar_update(
     asset_server: Res<AssetServer>,
     mut query: Query<(Entity, &mut Transform, &mut AttackBar, &mut Handle<Image>)>,
     enemy_query: Query<&Transform, (With<EnemyBody>, Without<AttackBar>)>,
+    mut egui_contexts: EguiContexts,
+    editor_query: Query<Entity, With<EditorWindow>>,
 ) {
+    if let Ok(editor_entity) = editor_query.get_single() {
+        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+            return;
+        }
+    }
+
     if game_state.mnfight != 4 && game_state.mnfight != 5 { return; }
 
     for (bar_entity, mut transform, mut bar, mut texture) in query.iter_mut() {
@@ -192,7 +209,7 @@ pub fn attack_bar_update(
             
             if bar.flash_state {
                  bar.flash_state = false;
-                 *texture = asset_server.load("spr_targetchoice_0.png");
+                 *texture = asset_server.load("attack/spr_targetchoice_0.png");
             }
 
             let box_center_x = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 0.0).x;
@@ -204,7 +221,7 @@ pub fn attack_bar_update(
                     commands.entity(bar_entity).despawn();
                 } else {
                     bar.moving = false;
-                    *texture = asset_server.load("spr_targetchoice_1.png");
+                    *texture = asset_server.load("attack/spr_targetchoice_1.png");
                     bar.flash_state = true; 
                 }
                 
@@ -228,7 +245,7 @@ pub fn attack_bar_update(
                 let wait_time = if damage > 0 {
                     commands.spawn((
                         SpriteBundle {
-                            texture: asset_server.load("spr_strike_0.png"),
+                            texture: asset_server.load("attack/spr_strike_0.png"),
                             transform: Transform {
                                 translation: enemy_pos + Vec3::new(0.0, 0.0, Z_SLICE),
                                 scale: Vec3::splat(2.0),
@@ -255,7 +272,7 @@ pub fn attack_bar_update(
         } else {
             if bar.flash_timer.tick(time.delta()).just_finished() {
                 bar.flash_state = !bar.flash_state;
-                let path = if bar.flash_state { "spr_targetchoice_1.png" } else { "spr_targetchoice_0.png" };
+                let path = if bar.flash_state { "attack/spr_targetchoice_1.png" } else { "attack/spr_targetchoice_0.png" };
                 *texture = asset_server.load(path);
             }
         }
@@ -303,7 +320,7 @@ pub fn apply_pending_damage(
 
                     for (i, char) in dmg_str.chars().enumerate() {
                         let char_x = start_x_offset + (i as f32 * char_spacing);
-                        let texture_path = format!("spr_dmgnum_o_{}.png", char);
+                        let texture_path = format!("dmgnum/spr_dmgnum_o_{}.png", char);
 
                         parent.spawn(SpriteBundle {
                             texture: asset_server.load(texture_path),
@@ -318,7 +335,7 @@ pub fn apply_pending_damage(
                     }
                 } else {
                     parent.spawn(SpriteBundle {
-                        texture: asset_server.load("spr_dmgmiss_o.png"),
+                        texture: asset_server.load("dmgnum/spr_dmgmiss_o.png"),
                         sprite: Sprite {
                             color: Color::rgb(0.8, 0.8, 0.8), 
                             custom_size: None,
@@ -387,7 +404,7 @@ pub fn animate_slice_effect(
             if effect.frame_index > 5 {
                 commands.entity(entity).despawn();
             } else {
-                let path = format!("spr_strike_{}.png", effect.frame_index);
+                let path = format!("attack/spr_strike_{}.png", effect.frame_index);
                 *texture = asset_server.load(path);
             }
         }
@@ -628,7 +645,7 @@ pub fn soul_collision_detection(
 
                     commands.spawn((
                         SpriteBundle {
-                            texture: asset_server.load("spr_heart_0.png"), 
+                            texture: asset_server.load("heart/spr_heart_0.png"), 
                             sprite: Sprite { 
                                 color: Color::WHITE, 
                                 custom_size: Some(Vec2::new(16.0, 16.0)), 
@@ -692,7 +709,7 @@ pub fn heart_defeated_update(
                     defeated.state = HeartDefeatedState::Cracked;
                     defeated.timer = Timer::from_seconds(1.0, TimerMode::Once); 
                     
-                    *texture = asset_server.load("spr_heartbreak.png");
+                    *texture = asset_server.load("heart/spr_heartbreak.png");
                     transform.translation.x -= 2.0; 
                 }
             },
@@ -718,7 +735,7 @@ pub fn heart_defeated_update(
                         let vy = speed * direction_rad.sin(); 
 
                         let shard_index = rng.gen_range(0..4);
-                        let texture_path = format!("spr_heartshards_{}.png", shard_index);
+                        let texture_path = format!("heart/spr_heartshards_{}.png", shard_index);
 
                         commands.spawn((
                             SpriteBundle {
@@ -767,7 +784,7 @@ pub fn game_over_sequence_update(
 
                     commands.spawn((
                         SpriteBundle {
-                            texture: asset_server.load("spr_gameoverbg.png"),
+                            texture: asset_server.load("background/spr_gameoverbg.png"),
                             sprite: Sprite {
                                 color: Color::rgba(1.0, 1.0, 1.0, 0.0),
                                 ..default()
@@ -794,7 +811,7 @@ pub fn game_over_sequence_update(
                 }
             },
             GameOverSequenceState::Finished => {
-                // 完了後の処理
+                
             }
         }
     }

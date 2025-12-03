@@ -23,6 +23,11 @@ pub fn editor_ui_system(
                 .show(ui, |ui| {
                     
                     ui.horizontal(|ui| {
+                        ui.label("Name:");
+                        ui.text_edit_singleline(&mut game_state.name);
+                    });
+
+                    ui.horizontal(|ui| {
                         ui.label("Level (LV):");
                         let old_lv = game_state.lv;
                         ui.add(egui::Slider::new(&mut game_state.lv, 1..=20));
