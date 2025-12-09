@@ -1,4 +1,11 @@
 use bevy::prelude::*;
+use pyo3::prelude::*;
+use std::collections::HashMap;
+
+#[derive(Resource, Default)]
+pub struct DanmakuScripts {
+    pub modules: HashMap<String, PyObject>,
+}
 
 #[derive(Resource)]
 pub struct GameState {

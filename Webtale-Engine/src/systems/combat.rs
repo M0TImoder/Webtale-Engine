@@ -3,6 +3,8 @@ use bevy::sprite::Anchor;
 use rand::Rng;
 use std::f32::consts::PI;
 use bevy_egui::EguiContexts;
+use pyo3::prelude::*;
+use pyo3::types::PyDict; 
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
@@ -92,30 +94,66 @@ pub fn combat_turn_manager(
     time: Res<Time>,
     mut game_state: ResMut<GameState>,
     mut battle_box: ResMut<BattleBox>,
-    bullet_query: Query<Entity, With<LeapFrogBullet>>,
+    bullet_query: Query<Entity, With<PythonBullet>>,
+    mut scripts: ResMut<DanmakuScripts>,
 ) {
     if game_state.mnfight == 2 {
         if game_state.turntimer < 0.0 {
             game_state.turntimer = 5.0;
             
-            let spawn_x = ORIGIN_X + battle_box.current.max.x - 40.0;
-            let spawn_y = ORIGIN_Y - battle_box.current.max.y + 40.0;
+            // Load and run python script init
+            let script_content = std::fs::read_to_string("assets/danmaku/frog_jump.py").unwrap_or_default();
             
-            commands.spawn((
-                SpriteBundle {
-                    texture: asset_server.load("enemy/spr_frogbullet_stop.png"),
-                    transform: Transform::from_xyz(spawn_x, spawn_y, 30.0).with_scale(Vec3::splat(1.0)),
-                    ..default()
-                },
-                LeapFrogBullet {
-                    state: LeapFrogState::Waiting,
-                    timer: Timer::from_seconds(0.5 + rand::random::<f32>() * 0.5, TimerMode::Once),
-                    velocity: Vec3::ZERO,
-                    gravity: Vec3::ZERO,
-                    damage: 4,
-                },
-                Cleanup,
-            ));
+            Python::with_gil(|py| {
+                let sys = PyModule::import_bound(py, "sys").expect("Failed to import sys");
+                let path = sys.getattr("path").expect("Failed to get sys.path");
+                let env_path = std::env::current_dir().unwrap().join("assets").join("danmaku");
+                let _ = path.call_method1("append", (env_path.to_str().unwrap(),));
+
+                let module = PyModule::from_code_bound(py, &script_content, "frog_jump.py", "frog_jump").expect("Failed to load python script");
+                
+                // init()
+                let init_func = module.getattr("init").expect("Failed to get init function");
+                let init_result = init_func.call0().expect("Failed to call init");
+                let init_data: &Bound<PyDict> = init_result.downcast().expect("init should return dict");
+                
+                let box_data_obj = init_data.get_item("box").expect("box missing").expect("box None");
+                let _box_data: Vec<f32> = box_data_obj.extract().expect("box format error");
+                // Update battle box
+                // box_res.target = Rect::new(box_data[0], box_data[1], box_data[2], box_data[3]); 
+                // Setting initial box target in `battle_flow_control` is enough for now, 
+                // or we can update it here if needed dynamically.
+
+                let texture_path_obj = init_data.get_item("texture_wait").expect("texture_wait missing").expect("texture_wait None");
+                let texture_path: String = texture_path_obj.extract().unwrap();
+                
+                let spawn_x = ORIGIN_X + battle_box.current.max.x - 40.0;
+                let spawn_y = ORIGIN_Y - battle_box.current.max.y + 40.0;
+
+                // spawn()
+                let spawn_func = module.getattr("spawn").expect("Failed to get spawn function");
+                let bullet_obj: PyObject = spawn_func.call0().expect("Failed to call spawn").into();
+                
+                // Initialize bullet with position
+                let bullet_bound = bullet_obj.bind(py);
+                let _ = bullet_bound.call_method1("set_pos", (spawn_x, spawn_y));
+
+                commands.spawn((
+                    SpriteBundle {
+                        texture: asset_server.load(texture_path),
+                        transform: Transform::from_xyz(spawn_x, spawn_y, 30.0).with_scale(Vec3::splat(1.0)),
+                        ..default()
+                    },
+                    PythonBullet {
+                        script_name: "frog_jump".to_string(),
+                        bullet_data: bullet_obj,
+                        damage: 4,
+                    },
+                    Cleanup,
+                ));
+                
+                scripts.modules.insert("frog_jump".to_string(), module.into());
+            });
         }
 
         game_state.turntimer -= time.delta_seconds();
@@ -139,49 +177,59 @@ pub fn combat_turn_manager(
 }
 
 pub fn leapfrog_bullet_update(
-    _commands: Commands,
+    mut commands: Commands,
     time: Res<Time>,
     asset_server: Res<AssetServer>,
-    mut query: Query<(Entity, &mut Transform, &mut LeapFrogBullet, &mut Handle<Image>)>,
+    mut query: Query<(Entity, &mut Transform, &PythonBullet, &mut Handle<Image>)>,
+    _scripts: Res<DanmakuScripts>,
 ) {
     let dt = time.delta_seconds();
     
-    for (_entity, mut transform, mut bullet, mut texture) in query.iter_mut() {
-        match bullet.state {
-            LeapFrogState::Waiting => {
-                bullet.timer.tick(time.delta());
-                if bullet.timer.finished() {
-                    bullet.state = LeapFrogState::Jumping;
-                    *texture = asset_server.load("enemy/spr_frogbullet_go.png");
-                    
-                    let mut rng = rand::thread_rng();
-                    let dir_deg = 145.0 - rng.gen_range(0.0..20.0);
-                    let dir_rad = dir_deg * (PI / 180.0);
-                    
-                    let speed = (7.0 + rng.gen_range(0.0..3.0)) * 30.0;
-                    
-                    let vx = speed * dir_rad.cos(); 
-                    let vy = speed * dir_rad.sin();
-
-                    bullet.velocity = Vec3::new(vx, vy, 0.0);
-                    
-                    let grav_speed = 0.4 * 30.0 * 30.0;
-                    let grav_dir_deg = 280.0;
-                    let grav_rad = grav_dir_deg * (PI / 180.0);
-                    
-                    let gx = grav_speed * grav_rad.cos(); 
-                    let gy = grav_speed * grav_rad.sin();
-
-                    bullet.gravity = Vec3::new(gx, gy, 0.0);
+    Python::with_gil(|py| {
+        for (entity, mut transform, bullet, mut texture) in query.iter_mut() {
+            // We don't really need the module object anymore to call methods on the instance,
+            // but we keep the structure. Actually, we can just use the object directly.
+            
+            let bullet_obj = bullet.bullet_data.bind(py);
+            
+            // Call sys_update(dt)
+            if let Err(e) = bullet_obj.call_method1("sys_update", (dt,)) {
+                e.print(py);
+                continue;
+            }
+            
+            // Retrieve properties to sync with Rust
+            
+            // Sync Position
+            if let Ok(x) = bullet_obj.getattr("x").and_then(|v| v.extract::<f32>()) {
+                if let Ok(y) = bullet_obj.getattr("y").and_then(|v| v.extract::<f32>()) {
+                     transform.translation.x = x;
+                     transform.translation.y = y;
                 }
-            },
-            LeapFrogState::Jumping => {
-                let gravity = bullet.gravity;
-                bullet.velocity += gravity * dt;
-                transform.translation += bullet.velocity * dt;
+            }
+
+            // Sync Texture if changed
+            if let Ok(texture_val) = bullet_obj.getattr("texture") {
+                 if !texture_val.is_none() {
+                      if let Ok(path) = texture_val.extract::<String>() {
+                           *texture = asset_server.load(path);
+                           // Reset texture field to None to avoid reloading every frame (optional optimization)
+                           // For now we leave it or rely on setting it to None in python if we wanted one-shot,
+                           // but here we just load what is there.
+                           // Actually, to prevent repeated loading, checking equality or having a "changed" flag is better.
+                           // But for simplicity, we let Bevy asset server handle caching.
+                      }
+                 }
+            }
+            
+            // Check deletion
+            if let Ok(should_delete) = bullet_obj.getattr("should_delete").and_then(|v| v.extract::<bool>()) {
+                if should_delete {
+                    commands.entity(entity).despawn();
+                }
             }
         }
-    }
+    });
 }
 
 pub fn attack_bar_update(
@@ -596,7 +644,7 @@ pub fn soul_collision_detection(
     asset_server: Res<AssetServer>,
     mut game_state: ResMut<GameState>,
     mut soul_query: Query<(Entity, &Transform), With<Soul>>,
-    bullet_query: Query<(&Transform, &LeapFrogBullet)>,
+    bullet_query: Query<(&Transform, &PythonBullet)>,
     mut visibility_param_set: ParamSet<(
         Query<&mut Visibility, (With<Sprite>, Without<Soul>, Without<EditorWindow>)>,
         Query<&mut Visibility, (With<Text>, Without<Soul>, Without<EditorWindow>)>,

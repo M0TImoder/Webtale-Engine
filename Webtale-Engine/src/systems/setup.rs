@@ -7,7 +7,7 @@ use crate::constants::*;
 pub fn setup(
     mut commands: Commands, 
     asset_server: Res<AssetServer>,
-    window_query: Query<Entity, With<bevy::window::PrimaryWindow>>,
+    _window_query: Query<Entity, With<bevy::window::PrimaryWindow>>,
 ) {
 
     commands.spawn((

@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use pyo3::prelude::*;
 
 #[derive(Component)]
 pub struct Cleanup;
@@ -97,3 +98,10 @@ pub struct GameOverLogo;
 
 #[derive(Component)]
 pub struct EditorWindow;
+
+#[derive(Component)]
+pub struct PythonBullet {
+    pub script_name: String,
+    pub bullet_data: PyObject, 
+    pub damage: i32,
+}
