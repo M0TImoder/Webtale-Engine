@@ -65,10 +65,17 @@ pub fn soul_combat_movement(
     battle_box: Res<BattleBox>,
     mut query: Query<&mut Transform, With<Soul>>,
     mut egui_contexts: EguiContexts,
-    editor_query: Query<Entity, With<EditorWindow>>,
+    editor_query: Query<Entity, (With<EditorWindow>, With<Window>)>,
+    editor_state: Option<Res<EditorState>>,
 ) {
     if let Ok(editor_entity) = editor_query.get_single() {
         if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+            return;
+        }
+    }
+
+    if let Some(state) = editor_state {
+        if state.current_tab == EditorTab::DanmakuPreview {
             return;
         }
     }

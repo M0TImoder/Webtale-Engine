@@ -1,16 +1,24 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use crate::components::EditorWindow;
-use crate::resources::GameState;
+use crate::resources::{GameState, EditorState, EditorTab};
 
 pub fn editor_ui_system(
     mut contexts: EguiContexts,
     window_query: Query<Entity, (With<EditorWindow>, With<Window>)>,
     mut game_state: ResMut<GameState>,
+    mut editor_state: ResMut<EditorState>,
 ) {
     let Ok(editor_entity) = window_query.get_single() else { return };
 
     let ctx = contexts.ctx_for_window_mut(editor_entity);
+
+    egui::TopBottomPanel::top("editor_tabs").show(ctx, |ui| {
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut editor_state.current_tab, EditorTab::Battle, "Battle Screen");
+            ui.selectable_value(&mut editor_state.current_tab, EditorTab::DanmakuPreview, "Danmaku Preview");
+        });
+    });
 
     egui::SidePanel::right("editor_panel")
         .default_width(300.0)
@@ -83,4 +91,12 @@ pub fn editor_ui_system(
             
             ui.allocate_space(ui.available_size());
         });
+
+    if editor_state.current_tab == EditorTab::DanmakuPreview {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.centered_and_justified(|ui| {
+                ui.heading("Danmaku Preview Mode");
+            });
+        });
+    }
 }

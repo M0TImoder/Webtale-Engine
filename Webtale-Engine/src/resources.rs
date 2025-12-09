@@ -47,3 +47,15 @@ pub struct GameFonts {
     pub hp_label: Handle<Font>,
     pub damage: Handle<Font>, 
 }
+
+#[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
+pub enum EditorTab {
+    #[default]
+    Battle,
+    DanmakuPreview,
+}
+
+#[derive(Resource, Default)]
+pub struct EditorState {
+    pub current_tab: EditorTab,
+}
