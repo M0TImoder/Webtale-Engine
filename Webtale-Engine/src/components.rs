@@ -105,3 +105,6 @@ pub struct PythonBullet {
     pub bullet_data: PyObject, 
     pub damage: i32,
 }
+
+#[derive(Component)]
+pub struct BattleScreenPreview;

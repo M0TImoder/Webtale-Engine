@@ -66,3 +66,9 @@ pub enum EditorTab {
 pub struct EditorState {
     pub current_tab: EditorTab,
 }
+
+#[derive(Resource, Default)]
+pub struct EditorPreviewTexture(pub Handle<Image>);
+
+#[derive(Resource, Default)]
+pub struct DanmakuPreviewTexture(pub Handle<Image>);

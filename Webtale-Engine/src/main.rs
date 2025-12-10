@@ -36,6 +36,8 @@ fn main() {
             target: Rect::new(32.0, 250.0, 602.0, 385.0),
         })
         .init_resource::<EditorState>()
+        .init_resource::<EditorPreviewTexture>()
+        .init_resource::<DanmakuPreviewTexture>()
         .init_resource::<DanmakuScripts>()
         .add_systems(Startup, setup::setup)
         .add_systems(Update, (

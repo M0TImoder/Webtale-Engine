@@ -1,0 +1,26 @@
+    Checking Webtale-Engine v0.1.0 (C:\Users\motim\Documents\Git\Game\Webtale-Engine\Webtale-Engine)
+warning: unused variable: `texture_id`
+  --> src\systems\editor.rs:18:9
+   |
+18 |     let texture_id = contexts.add_image(preview_texture.0.clone());
+   |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_texture_id`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+error[E0499]: cannot borrow `contexts` as mutable more than once at a time
+   --> src\systems\editor.rs:114:24
+    |
+ 19 |     let ctx = contexts.ctx_for_window_mut(editor_entity);
+    |               -------- first mutable borrow occurs here
+...
+114 |             .show(ctx, |ui| {
+    |                        ^^^^ second mutable borrow occurs here
+115 |                 let preview_texture_id = contexts.add_image(danmaku_preview_texture.0.clone());
+    |                                          -------- second borrow occurs due to use of `contexts` in closure
+...
+150 |             .show(ctx, |_ui| {});
+    |                   --- first borrow later used here
+
+For more information about this error, try `rustc --explain E0499`.
+warning: `Webtale-Engine` (bin "Webtale-Engine") generated 1 warning
+error: could not compile `Webtale-Engine` (bin "Webtale-Engine") due to 1 previous error; 1 warning emitted

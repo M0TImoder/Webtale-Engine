@@ -1,17 +1,31 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use crate::components::EditorWindow;
-use crate::resources::{GameState, EditorState, EditorTab};
+use crate::components::{EditorWindow, BattleScreenPreview};
+use crate::resources::{GameState, EditorState, EditorTab, EditorPreviewTexture, DanmakuPreviewTexture, BattleBox};
 
 pub fn editor_ui_system(
     mut contexts: EguiContexts,
     window_query: Query<Entity, (With<EditorWindow>, With<Window>)>,
     mut game_state: ResMut<GameState>,
     mut editor_state: ResMut<EditorState>,
+    preview_texture: Res<EditorPreviewTexture>,
+    _battle_box: ResMut<BattleBox>,
+    mut bg_sprite_query: Query<&mut Visibility, With<BattleScreenPreview>>,
+    danmaku_preview_texture: Res<DanmakuPreviewTexture>,
 ) {
     let Ok(editor_entity) = window_query.get_single() else { return };
 
+    let battle_texture_id = contexts.add_image(preview_texture.0.clone());
+    let danmaku_texture_id = contexts.add_image(danmaku_preview_texture.0.clone());
     let ctx = contexts.ctx_for_window_mut(editor_entity);
+
+    for mut vis in bg_sprite_query.iter_mut() {
+        if editor_state.current_tab == EditorTab::Battle {
+            *vis = Visibility::Inherited;
+        } else {
+            *vis = Visibility::Hidden;
+        }
+    }
 
     egui::TopBottomPanel::top("editor_tabs").show(ctx, |ui| {
         ui.horizontal(|ui| {
@@ -93,10 +107,46 @@ pub fn editor_ui_system(
         });
 
     if editor_state.current_tab == EditorTab::DanmakuPreview {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.centered_and_justified(|ui| {
-                ui.heading("Danmaku Preview Mode");
+        // Use Area with Order::Background to ensure the image is drawn behind the menu (TopBottomPanel)
+        // Sprite Position (0, 75) corresponds to Screen Rect (320, 45, 960, 525)
+        egui::Area::new("danmaku_preview_area".into())
+            .fixed_pos(egui::Pos2::new(320.0, 45.0))
+            .order(egui::Order::Background)
+            .show(ctx, |ui| {
+                let size = egui::Vec2::new(640.0, 480.0);
+                let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(danmaku_texture_id, size)));
+
+                 if response.clicked() || response.dragged() {
+                     if let Some(pos) = response.interact_pointer_pos() {
+                         // pos is in UI coordinates relative to the Area, effectively image local if Area is at image pos
+                         // Wait, interact_pointer_pos is in screen coordinates usually?
+                         // Or "absolute" coordinates.
+                         // Let's check typical behavior. usually interact_pointer_pos returns absolute.
+                         // response.rect is the screen rect of the widget.
+                         
+                         let image_rect = response.rect;
+                         let rel_x = pos.x - image_rect.min.x;
+                         let rel_y = pos.y - image_rect.min.y;
+                         
+                         // Convert to [0, 1]
+                         let uv_x = rel_x / image_rect.width();
+                         let uv_y = rel_y / image_rect.height();
+                         
+                         // Convert to Game World Coordinates
+                         // Camera is FixedVertical(480.0), so Height is 480.
+                         // World Width depends on aspect (640/480).
+                         
+                         let world_x = (uv_x - 0.5) * 640.0;
+                         let world_y = (0.5 - uv_y) * 480.0;
+                         
+                         println!("Preview Click: World({}, {})", world_x, world_y);
+                     }
+                 }
             });
-        });
+
+        // Add an empty CentralPanel to satisfy specific layout requirements if any, and allow SidePanel to act normally
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none())
+            .show(ctx, |_ui| {});
     }
 }

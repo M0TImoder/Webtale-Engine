@@ -25,6 +25,8 @@ pub fn handle_global_input(
     open_editor_window_query: Query<Entity, (With<EditorWindow>, With<Window>)>, 
     mut images: ResMut<Assets<Image>>,
     mut egui_contexts: EguiContexts,
+    mut editor_preview_texture: ResMut<EditorPreviewTexture>,
+    mut danmaku_preview_texture: ResMut<DanmakuPreviewTexture>,
 ) {
     if input.just_pressed(KeyCode::Escape) {
         exit_writer.send(AppExit::default());
@@ -102,6 +104,8 @@ pub fn handle_global_input(
             image.resize(size);
             let image_handle = images.add(image);
 
+            editor_preview_texture.0 = image_handle.clone();
+
             commands.spawn((
                 Camera2dBundle {
                     camera: Camera {
@@ -137,10 +141,100 @@ pub fn handle_global_input(
             commands.spawn((
                 SpriteBundle {
                     texture: image_handle,
-                    transform: Transform::from_xyz(0.0, 110.0, 0.0), 
+                    transform: Transform::from_xyz(0.0, 75.0, 0.0), 
                     ..default()
                 },
                 RenderLayers::layer(1),
+                EditorWindow,
+                BattleScreenPreview,
+            ));
+
+            // --- Independent Danmaku Preview Setup ---
+            
+            // Create texture for independent preview
+            let mut preview_image = Image {
+                texture_descriptor: bevy::render::render_resource::TextureDescriptor {
+                    label: Some("Danmaku Preview Texture"),
+                    size,
+                    dimension: TextureDimension::D2,
+                    format: TextureFormat::Bgra8UnormSrgb,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    usage: TextureUsages::TEXTURE_BINDING
+                        | TextureUsages::COPY_DST
+                        | TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                },
+                ..default()
+            };
+            preview_image.resize(size);
+            let preview_image_handle = images.add(preview_image);
+            danmaku_preview_texture.0 = preview_image_handle.clone();
+
+            // Camera for independent preview (Layer 2)
+            commands.spawn((
+                Camera2dBundle {
+                    camera: Camera {
+                        target: RenderTarget::Image(preview_image_handle.clone()),
+                        order: -1,
+                        clear_color: ClearColorConfig::Custom(Color::BLACK),
+                        ..default()
+                    },
+                    projection: OrthographicProjection {
+                        scaling_mode: bevy::render::camera::ScalingMode::FixedVertical(480.0),
+                        ..default()
+                    },
+                    transform: Transform::from_xyz(0.0, 0.0, 999.9), 
+                    ..default()
+                },
+                RenderLayers::layer(2),
+                EditorWindow, 
+            ));
+
+            // Spawn dummy objects in Layer 2
+            let box_center = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
+            
+            // Box
+            // Note: BattleBox logic uses 9-slice or specific sprites usually. 
+            // For simplicity here, just spawn the sprite used in setup if known, or a simple white sprite.
+            // setup.rs uses `spawn_battle_box`. Here we just spawn a static sprite for visual reference.
+            commands.spawn((
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::WHITE,
+                        custom_size: Some(Vec2::new(570.0, 135.0)), // Approx size
+                        ..default()
+                    },
+                    transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, 0.0)),
+                    ..default()
+                },
+                RenderLayers::layer(2),
+                EditorWindow,
+            ));
+            
+            // Inner black box
+            commands.spawn((
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::BLACK,
+                        custom_size: Some(Vec2::new(560.0, 125.0)), 
+                        ..default()
+                    },
+                    transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, 1.0)),
+                    ..default()
+                },
+                RenderLayers::layer(2),
+                EditorWindow,
+            ));
+
+            // Dummy Soul
+            commands.spawn((
+                SpriteBundle {
+                    texture: asset_server.load("player/spr_soul_0.png"),
+                    transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, 2.0)),
+                    ..default()
+                },
+                RenderLayers::layer(2),
                 EditorWindow,
             ));
         }
