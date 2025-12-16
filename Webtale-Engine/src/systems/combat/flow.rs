@@ -100,12 +100,16 @@ pub fn combat_turn_manager(
         if game_state.turntimer < 0.0 {
             game_state.turntimer = 5.0;
             
-            let script_content = std::fs::read_to_string("assets/danmaku/frog_jump.py").unwrap_or_default();
+            let relative_path = format!("projects/{}/danmaku", PROJECT_NAME);
+            let script_file_path = format!("{}/frog_jump.py", relative_path);
+
+            let script_content = std::fs::read_to_string(&script_file_path).unwrap_or_default();
             
             Python::with_gil(|py| {
                 let sys = PyModule::import_bound(py, "sys").expect("Failed to import sys");
                 let path = sys.getattr("path").expect("Failed to get sys.path");
-                let env_path = std::env::current_dir().unwrap().join("assets").join("danmaku");
+                
+                let env_path = std::env::current_dir().unwrap().join(relative_path);
                 let _ = path.call_method1("append", (env_path.to_str().unwrap(),));
 
                 let module = PyModule::from_code_bound(py, &script_content, "frog_jump.py", "frog_jump").expect("Failed to load python script");

@@ -1,6 +1,8 @@
 use bevy::prelude::Color;
 use bevy::prelude::*;
 
+pub const PROJECT_NAME: &str = "default";
+
 pub const WINDOW_WIDTH: f32 = 640.0;
 pub const WINDOW_HEIGHT: f32 = 480.0;
 pub const ORIGIN_X: f32 = -320.0;
