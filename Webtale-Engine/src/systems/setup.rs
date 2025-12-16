@@ -1,5 +1,8 @@
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
+use std::fs;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
@@ -33,45 +36,100 @@ pub fn setup(
 }
 
 pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, game_fonts: &GameFonts) {
-    commands.insert_resource(GameState {
+    // --- ここから修正: Pythonから初期設定を読み込む ---
+    let project_name = PROJECT_NAME; // constants.rsから取得
+    let properties_path = format!("projects/{}/properties/properties.py", project_name);
+
+    // デフォルトのGameState（読み込み失敗時のフォールバック用）
+    let mut game_state = GameState {
         hp: 20.0,
         max_hp: 20.0,
         lv: 1,
         name: "CHARA".to_string(),
-        
         speed: 150.0,
         attack: 20.0,
         invincibility_duration: 1.0,
-
         enemy_hp: 30,
         enemy_max_hp: 30,
         enemy_def: 0,
-
-        mnfight: 0, 
+        mnfight: 0,
         myfight: 0,
-        
         menu_layer: MENU_LAYER_TOP,
         menu_coords: vec![0; 11],
-
-        inventory: vec![
-            "Pie".to_string(), 
-            "I. Noodles".to_string(),
-            "SnowPiece".to_string(), 
-            "SnowPiece".to_string(),
-            "Pie".to_string(), 
-            "Pie".to_string(),
-            "Pie".to_string(), 
-            "Pie".to_string()
-        ], 
+        inventory: vec![],
         item_page: 0,
-        
         dialog_text: "* Froggit hops close!".to_string(),
-        
         bubble_timer: Timer::from_seconds(3.0, TimerMode::Once),
         damage_display_timer: Timer::from_seconds(1.0, TimerMode::Once),
         turntimer: -1.0,
         invincibility_timer: 0.0,
-    });
+    };
+
+    // Pythonスクリプトの読み込みと適用
+    if let Ok(script_content) = fs::read_to_string(&properties_path) {
+        Python::with_gil(|py| {
+            if let Ok(module) = PyModule::from_code_bound(py, &script_content, "properties.py", "properties") {
+                if let Ok(func) = module.getattr("get_initial_properties") {
+                    if let Ok(result) = func.call0() {
+                        // 結果を辞書型として取得
+                        if let Ok(props) = result.downcast::<PyDict>() {
+                            
+                            // 修正: unwrap_or(game_state.xxx) をやめ、取得成功時のみ代入する形に変更
+                            
+                            if let Ok(Some(val)) = props.get_item("name") { 
+                                if let Ok(v) = val.extract() { game_state.name = v; }
+                            }
+                            if let Ok(Some(val)) = props.get_item("lv") { 
+                                if let Ok(v) = val.extract() { game_state.lv = v; }
+                            }
+                            if let Ok(Some(val)) = props.get_item("max_hp") { 
+                                if let Ok(v) = val.extract() { game_state.max_hp = v; }
+                            }
+                            if let Ok(Some(val)) = props.get_item("hp") { 
+                                if let Ok(v) = val.extract() { game_state.hp = v; }
+                            }
+                            
+                            if let Ok(Some(val)) = props.get_item("speed") { 
+                                if let Ok(v) = val.extract() { game_state.speed = v; }
+                            }
+                            if let Ok(Some(val)) = props.get_item("attack") { 
+                                if let Ok(v) = val.extract() { game_state.attack = v; }
+                            }
+                            if let Ok(Some(val)) = props.get_item("invincibility_duration") { 
+                                if let Ok(v) = val.extract() { game_state.invincibility_duration = v; }
+                            }
+
+                            if let Ok(Some(val)) = props.get_item("enemy_hp") { 
+                                if let Ok(v) = val.extract() { game_state.enemy_hp = v; }
+                            }
+                            if let Ok(Some(val)) = props.get_item("enemy_max_hp") { 
+                                if let Ok(v) = val.extract() { game_state.enemy_max_hp = v; }
+                            }
+                            if let Ok(Some(val)) = props.get_item("enemy_def") { 
+                                if let Ok(v) = val.extract() { game_state.enemy_def = v; }
+                            }
+
+                            if let Ok(Some(val)) = props.get_item("inventory") { 
+                                if let Ok(list) = val.downcast::<PyList>() {
+                                    if let Ok(v) = list.extract() { game_state.inventory = v; }
+                                }
+                            }
+                        }
+                    } else {
+                        eprintln!("Failed to call get_initial_properties in properties.py");
+                    }
+                } else {
+                    eprintln!("Function get_initial_properties not found in properties.py");
+                }
+            } else {
+                eprintln!("Failed to load properties.py module");
+            }
+        });
+    } else {
+        eprintln!("Could not read properties.py at {}", properties_path);
+    }
+
+    commands.insert_resource(game_state);
 
     let enemy_base_x = 320.0; 
     let enemy_base_y = 160.0; 
