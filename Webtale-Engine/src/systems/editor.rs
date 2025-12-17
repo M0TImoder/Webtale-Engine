@@ -107,8 +107,6 @@ pub fn editor_ui_system(
         });
 
     if editor_state.current_tab == EditorTab::DanmakuPreview {
-        // Use Area with Order::Background to ensure the image is drawn behind the menu (TopBottomPanel)
-        // Sprite Position (0, 75) corresponds to Screen Rect (320, 45, 960, 525)
         egui::Area::new("danmaku_preview_area".into())
             .fixed_pos(egui::Pos2::new(320.0, 45.0))
             .order(egui::Order::Background)
@@ -118,23 +116,13 @@ pub fn editor_ui_system(
 
                  if response.clicked() || response.dragged() {
                      if let Some(pos) = response.interact_pointer_pos() {
-                         // pos is in UI coordinates relative to the Area, effectively image local if Area is at image pos
-                         // Wait, interact_pointer_pos is in screen coordinates usually?
-                         // Or "absolute" coordinates.
-                         // Let's check typical behavior. usually interact_pointer_pos returns absolute.
-                         // response.rect is the screen rect of the widget.
                          
                          let image_rect = response.rect;
                          let rel_x = pos.x - image_rect.min.x;
                          let rel_y = pos.y - image_rect.min.y;
                          
-                         // Convert to [0, 1]
                          let uv_x = rel_x / image_rect.width();
                          let uv_y = rel_y / image_rect.height();
-                         
-                         // Convert to Game World Coordinates
-                         // Camera is FixedVertical(480.0), so Height is 480.
-                         // World Width depends on aspect (640/480).
                          
                          let world_x = (uv_x - 0.5) * 640.0;
                          let world_y = (0.5 - uv_y) * 480.0;
@@ -144,7 +132,6 @@ pub fn editor_ui_system(
                  }
             });
 
-        // Add an empty CentralPanel to satisfy specific layout requirements if any, and allow SidePanel to act normally
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |_ui| {});
