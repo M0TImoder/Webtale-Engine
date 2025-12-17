@@ -67,56 +67,48 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     };
 
     let project_name = PROJECT_NAME;
-
     let player_path = format!("projects/{}/properties/playerStatus.py", project_name);
-    if let Ok(script) = fs::read_to_string(&player_path) {
+    let mut item_dictionary = ItemDictionary::default();
+    let item_path = format!("projects/{}/properties/item.py", project_name);
+
+    if let Ok(script) = fs::read_to_string(&item_path) {
         Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "playerStatus.py", "playerStatus") {
-                if let Ok(func) = module.getattr("get_player_status") {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "item.py", "item") {
+                
+                // アイテム定義(辞書)の読み込み
+                if let Ok(func) = module.getattr("get_item_data") {
                     if let Ok(result) = func.call0() {
-                        if let Ok(props) = result.downcast::<PyDict>() {
-                            if let Ok(Some(val)) = props.get_item("name") { if let Ok(v) = val.extract() { game_state.name = v; } }
-                            if let Ok(Some(val)) = props.get_item("lv") { if let Ok(v) = val.extract() { game_state.lv = v; } }
-                            if let Ok(Some(val)) = props.get_item("max_hp") { if let Ok(v) = val.extract() { game_state.max_hp = v; } }
-                            if let Ok(Some(val)) = props.get_item("hp") { if let Ok(v) = val.extract() { game_state.hp = v; } }
-                            
-                            if let Ok(Some(val)) = props.get_item("speed") { if let Ok(v) = val.extract() { game_state.speed = v; } }
-                            if let Ok(Some(val)) = props.get_item("attack") { if let Ok(v) = val.extract() { game_state.attack = v; } }
-                            if let Ok(Some(val)) = props.get_item("invincibility_duration") { if let Ok(v) = val.extract() { game_state.invincibility_duration = v; } }
-                            
-                            if let Ok(Some(val)) = props.get_item("inventory") { 
-                                if let Ok(list) = val.downcast::<PyList>() {
-                                    if let Ok(v) = list.extract() { game_state.inventory = v; }
+                        if let Ok(dict) = result.downcast::<PyDict>() {
+                            for (key, value) in dict.iter() {
+                                let item_name: String = key.extract().unwrap_or_default();
+                                if let Ok(data) = value.downcast::<PyDict>() {
+                                    let heal: i32 = data.get_item("heal").ok().flatten().and_then(|v| v.extract().ok()).unwrap_or(0);
+                                    let text: String = data.get_item("text").ok().flatten().and_then(|v| v.extract().ok()).unwrap_or_default();
+                                    
+                                    item_dictionary.0.insert(item_name, ItemInfo { heal_amount: heal, text });
                                 }
                             }
                         }
                     }
                 }
-            }
-        });
-    } else {
-        println!("Warning: Could not load {}", player_path);
-    }
 
-    let enemy_path = format!("projects/{}/properties/enemyStatus.py", project_name);
-    if let Ok(script) = fs::read_to_string(&enemy_path) {
-        Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.py", "enemyStatus") {
-                if let Ok(func) = module.getattr("get_enemy_status") {
+                // 初期インベントリの読み込み (playerStatusの内容を上書き)
+                if let Ok(func) = module.getattr("get_initial_inventory") {
                     if let Ok(result) = func.call0() {
-                        if let Ok(props) = result.downcast::<PyDict>() {
-                            if let Ok(Some(val)) = props.get_item("enemy_hp") { if let Ok(v) = val.extract() { game_state.enemy_hp = v; } }
-                            if let Ok(Some(val)) = props.get_item("enemy_max_hp") { if let Ok(v) = val.extract() { game_state.enemy_max_hp = v; } }
-                            if let Ok(Some(val)) = props.get_item("enemy_def") { if let Ok(v) = val.extract() { game_state.enemy_def = v; } }
+                        if let Ok(list) = result.downcast::<PyList>() {
+                             if let Ok(inv) = list.extract() {
+                                 game_state.inventory = inv;
+                             }
                         }
                     }
                 }
             }
         });
     } else {
-        println!("Warning: Could not load {}", enemy_path);
+        println!("Warning: Could not load {}", item_path);
     }
 
+    commands.insert_resource(item_dictionary); // リソースとして登録
     commands.insert_resource(game_state);
 
     let enemy_base_x = 320.0; 

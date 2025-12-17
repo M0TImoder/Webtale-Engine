@@ -252,6 +252,7 @@ pub fn menu_input_system(
     mut egui_contexts: EguiContexts,
     editor_query: Query<Entity, (With<EditorWindow>, With<Window>)>,
     editor_state: Option<Res<EditorState>>,
+    item_dict: Res<ItemDictionary>,
 ) {
     if let Ok(editor_entity) = editor_query.get_single() {
         if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
@@ -409,8 +410,34 @@ pub fn menu_input_system(
                 
                 if item_index < game_state.inventory.len() {
                     let item_name = game_state.inventory.remove(item_index);
-                    game_state.hp = game_state.max_hp; 
-                    let text = format!("* You ate the {}.\n* Your HP was maxed out!", item_name);
+                    
+                    let (heal_amount, flavor_text) = if let Some(info) = item_dict.0.get(&item_name) {
+                        (info.heal_amount, info.text.clone())
+                    } else {
+                        (0, "...".to_string())
+                    };
+
+                    let old_hp = game_state.hp;
+                    game_state.hp = (game_state.hp + heal_amount as f32).min(game_state.max_hp);
+                    let recovered = (game_state.hp - old_hp) as i32;
+
+                    let mut text = format!("* You ate the {}.", item_name);
+
+                    if game_state.hp >= game_state.max_hp {
+                        // 1. 完全回復した場合: 必ずこのメッセージを表示
+                        text.push_str("\n* Your HP was maxed out!");
+                    } else {
+                        // 2. 完全回復しなかった場合
+                        if !flavor_text.is_empty() {
+                            // テキストがある場合: 2行目にテキスト、3行目に回復量
+                            text.push_str(&format!("\n* {}", flavor_text));
+                            text.push_str(&format!("\n* You recovered {} HP!", recovered));
+                        } else {
+                            // テキストが空の場合: 2行目に回復量
+                            text.push_str(&format!("\n* You recovered {} HP!", recovered));
+                        }
+                    }
+
                     game_state.myfight = 2; 
                     
                     for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }

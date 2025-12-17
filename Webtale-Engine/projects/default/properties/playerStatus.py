@@ -8,15 +8,4 @@ def get_player_status():
         "speed": 150.0,
         "attack": 20.0,
         "invincibility_duration": 1.0,
-
-        "inventory": [
-            "Pie", 
-            "I. Noodles",
-            "SnowPiece", 
-            "SnowPiece",
-            "Face Steak", 
-            "Legendary hero", 
-            "Legendary hero", 
-            "Legendary hero"
-        ]
     }

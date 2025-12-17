@@ -2,6 +2,15 @@ use bevy::prelude::*;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
+#[derive(Clone, Debug)]
+pub struct ItemInfo {
+    pub heal_amount: i32,
+    pub text: String,
+}
+
+#[derive(Resource, Default)]
+pub struct ItemDictionary(pub HashMap<String, ItemInfo>);
+
 #[derive(Resource, Default)]
 pub struct DanmakuScripts {
     pub modules: HashMap<String, PyObject>,
