@@ -15,7 +15,7 @@ pub fn editor_ui_system(
 ) {
     let Ok(editor_entity) = window_query.get_single() else { return };
 
-    let battle_texture_id = contexts.add_image(preview_texture.0.clone());
+    let _battle_texture_id = contexts.add_image(preview_texture.0.clone());
     let danmaku_texture_id = contexts.add_image(danmaku_preview_texture.0.clone());
     let ctx = contexts.ctx_for_window_mut(editor_entity);
 
