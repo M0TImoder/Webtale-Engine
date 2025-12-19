@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct ItemInfo {
-    pub heal_amount: i32,
+    pub healAmount: i32,
     pub text: String,
 }
 
@@ -19,37 +19,37 @@ pub struct DanmakuScripts {
 #[derive(Resource)]
 pub struct GameState {
     pub hp: f32,
-    pub max_hp: f32,
+    pub maxHp: f32,
     pub lv: i32,
     pub name: String,
 
     pub speed: f32,
     pub attack: f32,
-    pub invincibility_duration: f32,
+    pub invincibilityDuration: f32,
     
-    pub enemy_hp: i32,
-    pub enemy_max_hp: i32,
-    pub enemy_def: i32,
+    pub enemyHp: i32,
+    pub enemyMaxHp: i32,
+    pub enemyDef: i32,
     
-    pub enemy_attacks: Vec<String>,
+    pub enemyAttacks: Vec<String>,
 
-    pub mnfight: i32,
-    pub myfight: i32,
+    pub mnFight: i32,
+    pub myFight: i32,
 
-    pub menu_layer: i32, 
-    pub menu_coords: Vec<i32>,
+    pub menuLayer: i32, 
+    pub menuCoords: Vec<i32>,
 
     pub inventory: Vec<String>,
-    pub item_page: usize,
+    pub itemPage: usize,
 
-    pub dialog_text: String,
+    pub dialogText: String,
     
-    pub bubble_timer: Timer,
-    pub damage_display_timer: Timer,
+    pub bubbleTimer: Timer,
+    pub damageDisplayTimer: Timer,
 
-    pub turntimer: f32,
+    pub turnTimer: f32,
     
-    pub invincibility_timer: f32,
+    pub invincibilityTimer: f32,
 }
 
 #[derive(Resource)]
@@ -62,7 +62,7 @@ pub struct BattleBox {
 pub struct GameFonts {
     pub main: Handle<Font>,
     pub dialog: Handle<Font>,
-    pub hp_label: Handle<Font>,
+    pub hpLabel: Handle<Font>,
     pub damage: Handle<Font>, 
 }
 
@@ -75,7 +75,7 @@ pub enum EditorTab {
 
 #[derive(Resource, Default)]
 pub struct EditorState {
-    pub current_tab: EditorTab,
+    pub currentTab: EditorTab,
 }
 
 #[derive(Resource, Default)]

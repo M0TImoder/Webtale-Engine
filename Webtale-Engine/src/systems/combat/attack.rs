@@ -5,76 +5,76 @@ use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
 
-pub fn attack_bar_update(
+pub fn attackBarUpdate(
     mut commands: Commands,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
-    mut game_state: ResMut<GameState>,
-    asset_server: Res<AssetServer>,
+    mut gameState: ResMut<GameState>,
+    assetServer: Res<AssetServer>,
     mut query: Query<(Entity, &mut Transform, &mut AttackBar, &mut Handle<Image>)>,
-    enemy_query: Query<&Transform, (With<EnemyBody>, Without<AttackBar>)>,
-    mut egui_contexts: EguiContexts,
-    editor_query: Query<Entity, With<EditorWindow>>,
+    enemyQuery: Query<&Transform, (With<EnemyBody>, Without<AttackBar>)>,
+    mut eguiContexts: EguiContexts,
+    editorQuery: Query<Entity, With<EditorWindow>>,
 ) {
-    if let Ok(editor_entity) = editor_query.get_single() {
-        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+    if let Ok(editorEntity) = editorQuery.get_single() {
+        if eguiContexts.ctx_for_window_mut(editorEntity).wants_keyboard_input() {
             return;
         }
     }
 
-    if game_state.mnfight != 4 && game_state.mnfight != 5 { return; }
+    if gameState.mnFight != 4 && gameState.mnFight != 5 { return; }
 
-    for (bar_entity, mut transform, mut bar, mut texture) in query.iter_mut() {
+    for (barEntity, mut transform, mut bar, mut texture) in query.iter_mut() {
         if bar.moving {
             transform.translation.x += bar.speed * time.delta_seconds();
             
-            if bar.flash_state {
-                 bar.flash_state = false;
-                 *texture = asset_server.load("attack/spr_targetchoice_0.png");
+            if bar.flashState {
+                 bar.flashState = false;
+                 *texture = assetServer.load("attack/spr_targetchoice_0.png");
             }
 
-            let box_center_x = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 0.0).x;
-            let miss_threshold = box_center_x + 280.0;
-            let auto_press = transform.translation.x > miss_threshold;
+            let boxCenterX = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 0.0).x;
+            let missThreshold = boxCenterX + 280.0;
+            let autoPress = transform.translation.x > missThreshold;
 
-            if input.just_pressed(KeyCode::KeyZ) || auto_press {
-                if auto_press {
-                    commands.entity(bar_entity).despawn();
+            if input.just_pressed(KeyCode::KeyZ) || autoPress {
+                if autoPress {
+                    commands.entity(barEntity).despawn();
                 } else {
                     bar.moving = false;
-                    *texture = asset_server.load("attack/spr_targetchoice_1.png");
-                    bar.flash_state = true; 
+                    *texture = assetServer.load("attack/spr_targetchoice_1.png");
+                    bar.flashState = true; 
                 }
                 
-                let distance = (transform.translation.x - box_center_x).abs();
+                let distance = (transform.translation.x - boxCenterX).abs();
                 
-                let base_damage = game_state.attack;
+                let baseDamage = gameState.attack;
                 
                 let damage = if distance < 12.0 {
-                    (base_damage * 2.2) as i32 
+                    (baseDamage * 2.2) as i32 
                 } else {
                     let stretch = (280.0 - distance).max(0.0) / 280.0;
-                    (base_damage * stretch * 2.0) as i32
+                    (baseDamage * stretch * 2.0) as i32
                 };
 
-                let enemy_pos = if let Ok(e_trans) = enemy_query.get_single() {
-                    e_trans.translation
+                let enemyPos = if let Ok(eTrans) = enemyQuery.get_single() {
+                    eTrans.translation
                 } else {
                     gml_to_bevy(320.0, 136.0)
                 };
 
-                let wait_time = if damage > 0 {
+                let waitTime = if damage > 0 {
                     commands.spawn((
                         SpriteBundle {
-                            texture: asset_server.load("attack/spr_strike_0.png"),
+                            texture: assetServer.load("attack/spr_strike_0.png"),
                             transform: Transform {
-                                translation: enemy_pos + Vec3::new(0.0, 0.0, Z_SLICE),
+                                translation: enemyPos + Vec3::new(0.0, 0.0, Z_SLICE),
                                 scale: Vec3::splat(2.0),
                                 ..default()
                             },
                             ..default()
                         },
-                        SliceEffect { timer: Timer::from_seconds(0.15, TimerMode::Repeating), frame_index: 0 },
+                        SliceEffect { timer: Timer::from_seconds(0.15, TimerMode::Repeating), frameIndex: 0 },
                         Cleanup,
                     ));
                     0.9 
@@ -83,80 +83,80 @@ pub fn attack_bar_update(
                 };
 
                 commands.spawn(PendingDamage {
-                    timer: Timer::from_seconds(wait_time, TimerMode::Once),
+                    timer: Timer::from_seconds(waitTime, TimerMode::Once),
                     damage,
-                    target_pos: enemy_pos,
+                    targetPos: enemyPos,
                 });
 
-                game_state.mnfight = 5; 
+                gameState.mnFight = 5; 
             }
         } else {
-            if bar.flash_timer.tick(time.delta()).just_finished() {
-                bar.flash_state = !bar.flash_state;
-                let path = if bar.flash_state { "attack/spr_targetchoice_1.png" } else { "attack/spr_targetchoice_0.png" };
-                *texture = asset_server.load(path);
+            if bar.flashTimer.tick(time.delta()).just_finished() {
+                bar.flashState = !bar.flashState;
+                let path = if bar.flashState { "attack/spr_targetchoice_1.png" } else { "attack/spr_targetchoice_0.png" };
+                *texture = assetServer.load(path);
             }
         }
     }
 }
 
-pub fn apply_pending_damage(
+pub fn applyPendingDamage(
     mut commands: Commands,
     time: Res<Time>,
-    mut game_state: ResMut<GameState>,
-    asset_server: Res<AssetServer>,
-    _game_fonts: Res<GameFonts>,
+    mut gameState: ResMut<GameState>,
+    assetServer: Res<AssetServer>,
+    _gameFonts: Res<GameFonts>,
     mut query: Query<(Entity, &mut PendingDamage)>,
 ) {
     for (entity, mut pending) in query.iter_mut() {
         if pending.timer.tick(time.delta()).finished() {
-            let old_hp = game_state.enemy_hp;
-            game_state.enemy_hp = (game_state.enemy_hp - pending.damage).max(0);
+            let oldHp = gameState.enemyHp;
+            gameState.enemyHp = (gameState.enemyHp - pending.damage).max(0);
             let damage = pending.damage;
-            let enemy_pos = pending.target_pos;
+            let enemyPos = pending.targetPos;
 
-            let text_start_pos = enemy_pos + Vec3::new(0.0, 50.0, Z_DAMAGE_TEXT);
+            let textStartPos = enemyPos + Vec3::new(0.0, 50.0, Z_DAMAGE_TEXT);
 
             commands.spawn((
                 SpatialBundle {
-                    transform: Transform::from_translation(text_start_pos),
+                    transform: Transform::from_translation(textStartPos),
                     ..default()
                 },
                 DamageNumber { 
                     timer: Timer::from_seconds(1.2, TimerMode::Once),
-                    velocity_y: 240.0, 
+                    velocityY: 240.0, 
                     gravity: 900.0,
-                    start_y: text_start_pos.y,
+                    startY: textStartPos.y,
                 },
                 Cleanup,
             )).with_children(|parent| {
                 let scale = 1.25;
 
                 if damage > 0 {
-                    let dmg_str = format!("{}", damage);
-                    let char_spacing = 42.0; 
+                    let dmgStr = format!("{}", damage);
+                    let charSpacing = 42.0; 
 
-                    let total_width = (dmg_str.chars().count() as f32) * char_spacing;
-                    let start_x_offset = -(total_width / 2.0) + (char_spacing / 2.0);
+                    let totalWidth = (dmgStr.chars().count() as f32) * charSpacing;
+                    let startXOffset = -(totalWidth / 2.0) + (charSpacing / 2.0);
 
-                    for (i, char) in dmg_str.chars().enumerate() {
-                        let char_x = start_x_offset + (i as f32 * char_spacing);
-                        let texture_path = format!("dmgnum/spr_dmgnum_o_{}.png", char);
+                    for (i, char) in dmgStr.chars().enumerate() {
+                        let charX = startXOffset + (i as f32 * charSpacing);
+                        let texturePath = format!("dmgnum/spr_dmgnum_o_{}.png", char);
 
                         parent.spawn(SpriteBundle {
-                            texture: asset_server.load(texture_path),
+                            texture: assetServer.load(texturePath),
                             sprite: Sprite { 
                                 color: Color::rgb(0.8, 0.0, 0.0), 
                                 custom_size: None,
                                 ..default() 
                             },
-                            transform: Transform::from_xyz(char_x, 0.0, 0.0).with_scale(Vec3::splat(scale)),
+                            transform: Transform::from_xyz(charX, 0.0, 0.0).with_scale(Vec3::splat(scale)),
                             ..default()
                         });
                     }
                 } else {
                     parent.spawn(SpriteBundle {
-                        texture: asset_server.load("dmgnum/spr_dmgmiss_o.png"),
+                        texture: assetServer.load("dmgnum/spr_dmgmiss_o.png"),
                         sprite: Sprite {
                             color: Color::rgb(0.8, 0.8, 0.8), 
                             custom_size: None,
@@ -169,38 +169,38 @@ pub fn apply_pending_damage(
             });
 
             if damage > 0 {
-                let bar_width_max = 140.0;
-                let bar_height = 14.0;
-                let bar_pos = enemy_pos + Vec3::new(0.0, 20.0, Z_DAMAGE_HP_BAR);
+                let barWidthMax = 140.0;
+                let barHeight = 14.0;
+                let barPos = enemyPos + Vec3::new(0.0, 20.0, Z_DAMAGE_HP_BAR);
 
                 commands.spawn((
                     SpatialBundle {
-                        transform: Transform::from_translation(bar_pos),
+                        transform: Transform::from_translation(barPos),
                         ..default()
                     },
                     EnemyHpBar {
                         lifespan: Timer::from_seconds(1.2, TimerMode::Once),
                         animation: Timer::from_seconds(1.0, TimerMode::Once),
-                        start_width: (old_hp as f32 / game_state.enemy_max_hp as f32) * bar_width_max,
-                        target_width: (game_state.enemy_hp as f32 / game_state.enemy_max_hp as f32) * bar_width_max,
+                        startWidth: (oldHp as f32 / gameState.enemyMaxHp as f32) * barWidthMax,
+                        targetWidth: (gameState.enemyHp as f32 / gameState.enemyMaxHp as f32) * barWidthMax,
                     },
                     Cleanup,
                 )).with_children(|parent| {
                     parent.spawn(SpriteBundle {
-                        sprite: Sprite { color: Color::DARK_GRAY, custom_size: Some(Vec2::new(bar_width_max, bar_height)), ..default() },
+                        sprite: Sprite { color: Color::DARK_GRAY, custom_size: Some(Vec2::new(barWidthMax, barHeight)), ..default() },
                         transform: Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)), 
                         ..default()
                     });
-                    let left_offset = -bar_width_max / 2.0;
+                    let leftOffset = -barWidthMax / 2.0;
                     parent.spawn((
                         SpriteBundle {
                             sprite: Sprite { 
                                 color: Color::rgb(0.0, 1.0, 0.0), 
-                                custom_size: Some(Vec2::new((old_hp as f32 / game_state.enemy_max_hp as f32) * bar_width_max, bar_height)),
+                                custom_size: Some(Vec2::new((oldHp as f32 / gameState.enemyMaxHp as f32) * barWidthMax, barHeight)),
                                 anchor: Anchor::CenterLeft, 
                                 ..default() 
                             },
-                            transform: Transform::from_translation(Vec3::new(left_offset, 0.0, 0.0)),
+                            transform: Transform::from_translation(Vec3::new(leftOffset, 0.0, 0.0)),
                             ..default()
                         },
                         EnemyHpBarForeground,
@@ -213,86 +213,86 @@ pub fn apply_pending_damage(
     }
 }
 
-pub fn animate_slice_effect(
+pub fn animateSliceEffect(
     mut commands: Commands,
     time: Res<Time>,
-    asset_server: Res<AssetServer>,
+    assetServer: Res<AssetServer>,
     mut query: Query<(Entity, &mut SliceEffect, &mut Handle<Image>)>,
 ) {
     for (entity, mut effect, mut texture) in query.iter_mut() {
         if effect.timer.tick(time.delta()).just_finished() {
-            effect.frame_index += 1;
-            if effect.frame_index > 5 {
+            effect.frameIndex += 1;
+            if effect.frameIndex > 5 {
                 commands.entity(entity).despawn();
             } else {
-                let path = format!("attack/spr_strike_{}.png", effect.frame_index);
-                *texture = asset_server.load(path);
+                let path = format!("attack/spr_strike_{}.png", effect.frameIndex);
+                *texture = assetServer.load(path);
             }
         }
     }
 }
 
-pub fn damage_number_update(
+pub fn damageNumberUpdate(
     mut commands: Commands,
     time: Res<Time>,
-    mut game_state: ResMut<GameState>,
+    mut gameState: ResMut<GameState>,
     mut query: Query<(Entity, &mut Transform, &mut DamageNumber), Without<EnemyBody>>,
-    attack_bar_query: Query<Entity, With<AttackBar>>,
-    target_box_query: Query<Entity, With<AttackTargetBox>>,
-    mut enemy_query: Query<(Entity, &mut Sprite, &Transform, &Handle<Image>), With<EnemyBody>>,
+    attackBarQuery: Query<Entity, With<AttackBar>>,
+    targetBoxQuery: Query<Entity, With<AttackTargetBox>>,
+    mut enemyQuery: Query<(Entity, &mut Sprite, &Transform, &Handle<Image>), With<EnemyBody>>,
 ) {
     for (entity, mut transform, mut dmg) in query.iter_mut() {
         dmg.timer.tick(time.delta());
         
-        transform.translation.y += dmg.velocity_y * time.delta_seconds();
-        dmg.velocity_y -= dmg.gravity * time.delta_seconds();
+        transform.translation.y += dmg.velocityY * time.delta_seconds();
+        dmg.velocityY -= dmg.gravity * time.delta_seconds();
 
-        if transform.translation.y < dmg.start_y {
-            transform.translation.y = dmg.start_y;
-            dmg.velocity_y = 0.0;
+        if transform.translation.y < dmg.startY {
+            transform.translation.y = dmg.startY;
+            dmg.velocityY = 0.0;
             dmg.gravity = 0.0;
         }
 
         if dmg.timer.finished() {
             commands.entity(entity).despawn_recursive();
             
-            for bar_entity in attack_bar_query.iter() { commands.entity(bar_entity).despawn(); }
-            for box_entity in target_box_query.iter() { commands.entity(box_entity).despawn(); }
+            for barEntity in attackBarQuery.iter() { commands.entity(barEntity).despawn(); }
+            for boxEntity in targetBoxQuery.iter() { commands.entity(boxEntity).despawn(); }
             
-            if game_state.enemy_hp <= 0 {
-                for (e_entity, _, e_transform, handle) in enemy_query.iter_mut() {
-                    commands.entity(e_entity).insert(Vaporizing {
-                        scan_line: 0.0,
-                        image_handle: handle.clone(),
-                        initial_y: e_transform.translation.y,
+            if gameState.enemyHp <= 0 {
+                for (eEntity, _, eTransform, handle) in enemyQuery.iter_mut() {
+                    commands.entity(eEntity).insert(Vaporizing {
+                        scanLine: 0.0,
+                        imageHandle: handle.clone(),
+                        initialY: eTransform.translation.y,
                     });
                 }
-                game_state.mnfight = 0; 
+                gameState.mnFight = 0; 
             } else {
-                game_state.mnfight = 1; 
-                game_state.bubble_timer.reset(); 
-                game_state.menu_layer = MENU_LAYER_TOP;
+                gameState.mnFight = 1; 
+                gameState.bubbleTimer.reset(); 
+                gameState.menuLayer = MENU_LAYER_TOP;
             }
         }
     }
 }
 
-pub fn enemy_hp_bar_update(
+pub fn enemyHpBarUpdate(
     mut commands: Commands,
     time: Res<Time>,
     mut query: Query<(Entity, &mut EnemyHpBar, &Children)>,
-    mut bar_sprite_query: Query<&mut Sprite, With<EnemyHpBarForeground>>,
+    mut barSpriteQuery: Query<&mut Sprite, With<EnemyHpBarForeground>>,
 ) {
     for (entity, mut bar, children) in query.iter_mut() {
         bar.lifespan.tick(time.delta());
         bar.animation.tick(time.delta());
 
         let t = bar.animation.fraction();
-        let current_width = bar.start_width + (bar.target_width - bar.start_width) * t;
+        let currentWidth = bar.startWidth + (bar.targetWidth - bar.startWidth) * t;
 
         for &child in children.iter() {
-            if let Ok(mut sprite) = bar_sprite_query.get_mut(child) {
-                sprite.custom_size = Some(Vec2::new(current_width, 14.0));
+            if let Ok(mut sprite) = barSpriteQuery.get_mut(child) {
+                sprite.custom_size = Some(Vec2::new(currentWidth, 14.0));
             }
         }
 

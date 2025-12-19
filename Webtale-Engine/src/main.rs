@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use bevy::prelude::*;
 use bevy::asset::AssetMetaCheck;
 use bevy_egui::EguiPlugin;
@@ -41,36 +43,36 @@ fn main() {
         .init_resource::<DanmakuScripts>()
         .add_systems(Startup, setup::setup)
         .add_systems(Update, (
-            input::handle_global_input,
-            setup::camera_scaling_system,
-            input::menu_input_system,
-            ui::menu_render_system,
-            player::soul_position_sync,
-            player::soul_combat_movement,
-            ui::update_box_size,
-            ui::draw_battle_box,
-            ui::draw_ui_status,
-            ui::update_button_sprites,
-            ui::animate_text,
-            ui::animate_enemy_head, 
-            editor::editor_ui_system,
+            input::handleGlobalInput,
+            setup::cameraScalingSystem,
+            input::menuInputSystem,
+            ui::menuRenderSystem,
+            player::soulPositionSync,
+            player::soulCombatMovement,
+            ui::updateBoxSize,
+            ui::drawBattleBox,
+            ui::drawUiStatus,
+            ui::updateButtonSprites,
+            ui::animateText,
+            ui::animateEnemyHead, 
+            editor::editorUiSystem,
         ))
         .add_systems(Update, (
-            combat::battle_flow_control,
-            combat::attack_bar_update,
-            combat::apply_pending_damage,   
-            combat::animate_slice_effect,
-            combat::damage_number_update,   
-            combat::enemy_hp_bar_update,    
-            combat::vaporize_enemy_system, 
-            combat::dust_particle_update,
-            combat::leapfrog_bullet_update,
-            combat::combat_turn_manager,
-            combat::soul_collision_detection,
-            combat::invincibility_update,
-            combat::heart_defeated_update,
-            combat::heart_shard_update,
-            combat::game_over_sequence_update,
+            combat::battleFlowControl,
+            combat::attackBarUpdate,
+            combat::applyPendingDamage,   
+            combat::animateSliceEffect,
+            combat::damageNumberUpdate,   
+            combat::enemyHpBarUpdate,    
+            combat::vaporizeEnemySystem, 
+            combat::dustParticleUpdate,
+            combat::leapfrogBulletUpdate,
+            combat::combatTurnManager,
+            combat::soulCollisionDetection,
+            combat::invincibilityUpdate,
+            combat::heartDefeatedUpdate,
+            combat::heartShardUpdate,
+            combat::gameOverSequenceUpdate,
         ))
         .run();
 }

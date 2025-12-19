@@ -3,10 +3,10 @@ use pyo3::prelude::*;
 use crate::components::*;
 use crate::resources::*;
 
-pub fn leapfrog_bullet_update(
+pub fn leapfrogBulletUpdate(
     mut commands: Commands,
     time: Res<Time>,
-    asset_server: Res<AssetServer>,
+    assetServer: Res<AssetServer>,
     mut query: Query<(Entity, &mut Transform, &PythonBullet, &mut Handle<Image>)>,
     _scripts: Res<DanmakuScripts>,
 ) {
@@ -14,30 +14,30 @@ pub fn leapfrog_bullet_update(
     
     Python::with_gil(|py| {
         for (entity, mut transform, bullet, mut texture) in query.iter_mut() {
-            let bullet_obj = bullet.bullet_data.bind(py);
+            let bulletObj = bullet.bulletData.bind(py);
             
-            if let Err(e) = bullet_obj.call_method1("sys_update", (dt,)) {
+            if let Err(e) = bulletObj.call_method1("sysUpdate", (dt,)) {
                 e.print(py);
                 continue;
             }
             
-            if let Ok(x) = bullet_obj.getattr("x").and_then(|v| v.extract::<f32>()) {
-                if let Ok(y) = bullet_obj.getattr("y").and_then(|v| v.extract::<f32>()) {
+            if let Ok(x) = bulletObj.getattr("x").and_then(|v| v.extract::<f32>()) {
+                if let Ok(y) = bulletObj.getattr("y").and_then(|v| v.extract::<f32>()) {
                      transform.translation.x = x;
                      transform.translation.y = y;
                 }
             }
 
-            if let Ok(texture_val) = bullet_obj.getattr("texture") {
-                 if !texture_val.is_none() {
-                      if let Ok(path) = texture_val.extract::<String>() {
-                           *texture = asset_server.load(path);
+            if let Ok(textureVal) = bulletObj.getattr("texture") {
+                 if !textureVal.is_none() {
+                      if let Ok(path) = textureVal.extract::<String>() {
+                           *texture = assetServer.load(path);
                       }
                  }
             }
             
-            if let Ok(should_delete) = bullet_obj.getattr("should_delete").and_then(|v| v.extract::<bool>()) {
-                if should_delete {
+            if let Ok(shouldDelete) = bulletObj.getattr("shouldDelete").and_then(|v| v.extract::<bool>()) {
+                if shouldDelete {
                     commands.entity(entity).despawn();
                 }
             }
@@ -45,44 +45,44 @@ pub fn leapfrog_bullet_update(
     });
 }
 
-pub fn soul_collision_detection(
+pub fn soulCollisionDetection(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut game_state: ResMut<GameState>,
-    mut soul_query: Query<(Entity, &Transform), With<Soul>>,
-    bullet_query: Query<(&Transform, &PythonBullet)>,
-    mut visibility_param_set: ParamSet<(
+    assetServer: Res<AssetServer>,
+    mut gameState: ResMut<GameState>,
+    mut soulQuery: Query<(Entity, &Transform), With<Soul>>,
+    bulletQuery: Query<(&Transform, &PythonBullet)>,
+    mut visibilityParamSet: ParamSet<(
         Query<&mut Visibility, (With<Sprite>, Without<Soul>, Without<EditorWindow>)>,
         Query<&mut Visibility, (With<Text>, Without<Soul>, Without<EditorWindow>)>,
     )>,
 ) {
-    if game_state.invincibility_timer > 0.0 {
+    if gameState.invincibilityTimer > 0.0 {
         return;
     }
 
-    if let Ok((soul_entity, soul_tf)) = soul_query.get_single_mut() {
-        let soul_radius = 6.0;
-        let bullet_radius = 10.0;
+    if let Ok((soulEntity, soulTf)) = soulQuery.get_single_mut() {
+        let soulRadius = 6.0;
+        let bulletRadius = 10.0;
 
-        for (bullet_tf, bullet) in bullet_query.iter() {
-            let distance = soul_tf.translation.distance(bullet_tf.translation);
-            if distance < (soul_radius + bullet_radius) {
-                game_state.hp -= bullet.damage as f32;
+        for (bulletTf, bullet) in bulletQuery.iter() {
+            let distance = soulTf.translation.distance(bulletTf.translation);
+            if distance < (soulRadius + bulletRadius) {
+                gameState.hp -= bullet.damage as f32;
                 
-                game_state.invincibility_timer = game_state.invincibility_duration;
+                gameState.invincibilityTimer = gameState.invincibilityDuration;
 
-                if game_state.hp <= 0.0 { 
-                    game_state.hp = 0.0; 
-                    game_state.mnfight = 99;
+                if gameState.hp <= 0.0 { 
+                    gameState.hp = 0.0; 
+                    gameState.mnFight = 99;
 
-                    for mut visibility in visibility_param_set.p0().iter_mut() {
+                    for mut visibility in visibilityParamSet.p0().iter_mut() {
                         *visibility = Visibility::Hidden;
                     }
-                    for mut visibility in visibility_param_set.p1().iter_mut() {
+                    for mut visibility in visibilityParamSet.p1().iter_mut() {
                         *visibility = Visibility::Hidden;
                     }
 
-                    commands.entity(soul_entity).despawn();
+                    commands.entity(soulEntity).despawn();
 
                     commands.spawn((
                         SpriteBundle {
@@ -99,19 +99,19 @@ pub fn soul_collision_detection(
 
                     commands.spawn((
                         SpriteBundle {
-                            texture: asset_server.load("heart/spr_heart_0.png"), 
+                            texture: assetServer.load("heart/spr_heart_0.png"), 
                             sprite: Sprite { 
                                 color: Color::WHITE, 
                                 custom_size: Some(Vec2::new(16.0, 16.0)), 
                                 ..default() 
                             },
-                            transform: Transform::from_translation(Vec3::new(soul_tf.translation.x, soul_tf.translation.y, 600.0)),
+                            transform: Transform::from_translation(Vec3::new(soulTf.translation.x, soulTf.translation.y, 600.0)),
                             ..default()
                         },
                         HeartDefeated {
                             timer: Timer::from_seconds(1.0, TimerMode::Once), 
                             state: HeartDefeatedState::InitialDelay,
-                            original_pos: soul_tf.translation,
+                            originalPos: soulTf.translation,
                         },
                         Cleanup,
                     ));
@@ -123,23 +123,23 @@ pub fn soul_collision_detection(
     }
 }
 
-pub fn invincibility_update(
+pub fn invincibilityUpdate(
     time: Res<Time>,
-    mut game_state: ResMut<GameState>,
-    mut soul_query: Query<&mut Visibility, With<Soul>>,
+    mut gameState: ResMut<GameState>,
+    mut soulQuery: Query<&mut Visibility, With<Soul>>,
 ) {
-    if game_state.invincibility_timer > 0.0 {
-        game_state.invincibility_timer -= time.delta_seconds();
+    if gameState.invincibilityTimer > 0.0 {
+        gameState.invincibilityTimer -= time.delta_seconds();
 
-        if let Ok(mut visibility) = soul_query.get_single_mut() {
-            if game_state.invincibility_timer <= 0.0 {
-                game_state.invincibility_timer = 0.0;
+        if let Ok(mut visibility) = soulQuery.get_single_mut() {
+            if gameState.invincibilityTimer <= 0.0 {
+                gameState.invincibilityTimer = 0.0;
                 *visibility = Visibility::Inherited;
             } else {
-                let blink_interval = 1.0 / 15.0; 
-                let blink_state = (game_state.invincibility_timer / blink_interval).ceil() as i32;
+                let blinkInterval = 1.0 / 15.0; 
+                let blinkState = (gameState.invincibilityTimer / blinkInterval).ceil() as i32;
                 
-                if blink_state % 2 == 0 {
+                if blinkState % 2 == 0 {
                     *visibility = Visibility::Hidden;
                 } else {
                     *visibility = Visibility::Inherited;

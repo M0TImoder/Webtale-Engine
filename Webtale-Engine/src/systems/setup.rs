@@ -9,93 +9,92 @@ use crate::constants::*;
 
 pub fn setup(
     mut commands: Commands, 
-    asset_server: Res<AssetServer>,
-    _window_query: Query<Entity, With<bevy::window::PrimaryWindow>>,
+    assetServer: Res<AssetServer>,
+    _windowQuery: Query<Entity, With<bevy::window::PrimaryWindow>>,
 ) {
-
     commands.spawn((
         Camera2dBundle::default(),
         MainCamera,
     ));
 
-    let font_main = asset_server.load("font/Mars_Needs_Cunnilingus.ttf");
-    let font_dialog = asset_server.load("font/8bitOperatorPlus-Bold.ttf");
-    let font_hp_label = asset_server.load("font/8-BIT_WO.ttf");
-    let font_damage = asset_server.load("font/hachicro.TTF");
+    let fontMain = assetServer.load("font/Mars_Needs_Cunnilingus.ttf");
+    let fontDialog = assetServer.load("font/8bitOperatorPlus-Bold.ttf");
+    let fontHpLabel = assetServer.load("font/8-BIT_WO.ttf");
+    let fontDamage = assetServer.load("font/hachicro.TTF");
 
-    let game_fonts = GameFonts {
-        main: font_main.clone(),
-        dialog: font_dialog.clone(),
-        hp_label: font_hp_label.clone(),
-        damage: font_damage.clone(), 
+    let gameFonts = GameFonts {
+        main: fontMain.clone(),
+        dialog: fontDialog.clone(),
+        hpLabel: fontHpLabel.clone(),
+        damage: fontDamage.clone(), 
     };
 
-    spawn_game_objects(&mut commands, &asset_server, &game_fonts);
+    spawnGameObjects(&mut commands, &assetServer, &gameFonts);
 
-    commands.insert_resource(game_fonts);
+    commands.insert_resource(gameFonts);
 }
 
-pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, game_fonts: &GameFonts) {
-    let mut game_state = GameState {
+pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, gameFonts: &GameFonts) {
+    let mut gameState = GameState {
         hp: 20.0,
-        max_hp: 20.0,
+        maxHp: 20.0,
         lv: 1,
         name: "CHARA".to_string(),
         
         speed: 150.0,
         attack: 20.0,
-        invincibility_duration: 1.0,
+        invincibilityDuration: 1.0,
 
-        enemy_hp: 30,
-        enemy_max_hp: 30,
-        enemy_def: 0,
-        enemy_attacks: vec![],
+        enemyHp: 30,
+        enemyMaxHp: 30,
+        enemyDef: 0,
+        enemyAttacks: vec![],
 
-        mnfight: 0, 
-        myfight: 0,
-        menu_layer: MENU_LAYER_TOP,
-        menu_coords: vec![0; 11],
+        mnFight: 0, 
+        myFight: 0,
+        menuLayer: MENU_LAYER_TOP,
+        menuCoords: vec![0; 11],
 
         inventory: vec![],
-        item_page: 0,
+        itemPage: 0,
         
-        dialog_text: "* Froggit hops close!".to_string(),
+        dialogText: "* Froggit hops close!".to_string(),
         
-        bubble_timer: Timer::from_seconds(3.0, TimerMode::Once),
-        damage_display_timer: Timer::from_seconds(1.0, TimerMode::Once),
-        turntimer: -1.0,
-        invincibility_timer: 0.0,
+        bubbleTimer: Timer::from_seconds(3.0, TimerMode::Once),
+        damageDisplayTimer: Timer::from_seconds(1.0, TimerMode::Once),
+        turnTimer: -1.0,
+        invincibilityTimer: 0.0,
     };
 
-    let project_name = PROJECT_NAME;
+    let projectName = PROJECT_NAME;
 
-    let mut item_dictionary = ItemDictionary::default();
-    let item_path = format!("projects/{}/properties/item.py", project_name);
+    let mut itemDictionary = ItemDictionary::default();
+    let itemPath = format!("projects/{}/properties/item.py", projectName);
 
-    if let Ok(script) = fs::read_to_string(&item_path) {
+    if let Ok(script) = fs::read_to_string(&itemPath) {
         Python::with_gil(|py| {
             if let Ok(module) = PyModule::from_code_bound(py, &script, "item.py", "item") {
-                if let Ok(func) = module.getattr("get_item_data") {
+                if let Ok(func) = module.getattr("getItemData") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
                             for (key, value) in dict.iter() {
-                                let item_name: String = key.extract().unwrap_or_default();
+                                let itemName: String = key.extract().unwrap_or_default();
                                 if let Ok(data) = value.downcast::<PyDict>() {
                                     let heal: i32 = data.get_item("heal").ok().flatten().and_then(|v| v.extract().ok()).unwrap_or(0);
                                     let text: String = data.get_item("text").ok().flatten().and_then(|v| v.extract().ok()).unwrap_or_default();
                                     
-                                    item_dictionary.0.insert(item_name, ItemInfo { heal_amount: heal, text });
+                                    itemDictionary.0.insert(itemName, ItemInfo { healAmount: heal, text });
                                 }
                             }
                         }
                     }
                 }
 
-                if let Ok(func) = module.getattr("get_initial_inventory") {
+                if let Ok(func) = module.getattr("getInitialInventory") {
                     if let Ok(result) = func.call0() {
                         if let Ok(list) = result.downcast::<PyList>() {
                              if let Ok(inv) = list.extract() {
-                                 game_state.inventory = inv;
+                                 gameState.inventory = inv;
                              }
                         }
                     }
@@ -103,27 +102,36 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
             }
         });
     } else {
-        println!("Warning: Could not load {}", item_path);
+        println!("Warning: Could not load {}", itemPath);
     }
 
-    let enemy_status_path = format!("projects/{}/properties/enemyStatus.py", project_name);
-    if let Ok(script) = fs::read_to_string(&enemy_status_path) {
+    let playerStatusPath = format!("projects/{}/properties/playerStatus.py", projectName);
+    if let Ok(script) = fs::read_to_string(&playerStatusPath) {
         Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.py", "enemyStatus") {
-                if let Ok(func) = module.getattr("get_enemy_status") {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "playerStatus.py", "playerStatus") {
+                if let Ok(func) = module.getattr("getPlayerStatus") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
-                            if let Some(hp) = dict.get_item("enemy_hp").ok().flatten().and_then(|v| v.extract().ok()) {
-                                game_state.enemy_hp = hp;
+                            if let Some(name) = dict.get_item("name").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.name = name;
                             }
-                            if let Some(max_hp) = dict.get_item("enemy_max_hp").ok().flatten().and_then(|v| v.extract().ok()) {
-                                game_state.enemy_max_hp = max_hp;
+                            if let Some(lv) = dict.get_item("lv").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.lv = lv;
                             }
-                            if let Some(def) = dict.get_item("enemy_def").ok().flatten().and_then(|v| v.extract().ok()) {
-                                game_state.enemy_def = def;
+                            if let Some(maxHp) = dict.get_item("maxHp").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.maxHp = maxHp;
                             }
-                            if let Some(attacks) = dict.get_item("attack_patterns").ok().flatten().and_then(|v| v.extract::<Vec<String>>().ok()) {
-                                game_state.enemy_attacks = attacks;
+                            if let Some(hp) = dict.get_item("hp").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.hp = hp;
+                            }
+                            if let Some(speed) = dict.get_item("speed").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.speed = speed;
+                            }
+                            if let Some(attack) = dict.get_item("attack").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.attack = attack;
+                            }
+                            if let Some(invDur) = dict.get_item("invincibilityDuration").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.invincibilityDuration = invDur;
                             }
                         }
                     }
@@ -131,23 +139,51 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
             }
         });
     } else {
-        println!("Warning: Could not load {}", enemy_status_path);
+        println!("Warning: Could not load {}", playerStatusPath);
     }
 
-    commands.insert_resource(item_dictionary);
-    commands.insert_resource(game_state);
+    let enemyStatusPath = format!("projects/{}/properties/enemyStatus.py", projectName);
+    if let Ok(script) = fs::read_to_string(&enemyStatusPath) {
+        Python::with_gil(|py| {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.py", "enemyStatus") {
+                if let Ok(func) = module.getattr("getEnemyStatus") {
+                    if let Ok(result) = func.call0() {
+                        if let Ok(dict) = result.downcast::<PyDict>() {
+                            if let Some(hp) = dict.get_item("enemyHp").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.enemyHp = hp;
+                            }
+                            if let Some(maxHp) = dict.get_item("enemyMaxHp").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.enemyMaxHp = maxHp;
+                            }
+                            if let Some(def) = dict.get_item("enemyDef").ok().flatten().and_then(|v| v.extract().ok()) {
+                                gameState.enemyDef = def;
+                            }
+                            if let Some(attacks) = dict.get_item("attackPatterns").ok().flatten().and_then(|v| v.extract::<Vec<String>>().ok()) {
+                                gameState.enemyAttacks = attacks;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        println!("Warning: Could not load {}", enemyStatusPath);
+    }
 
-    let enemy_base_x = 320.0; 
-    let enemy_base_y = 160.0; 
-    let enemy_scale = 1.0; 
+    commands.insert_resource(itemDictionary);
+    commands.insert_resource(gameState);
+
+    let enemyBaseX = 320.0; 
+    let enemyBaseY = 160.0; 
+    let enemyScale = 1.0; 
 
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load("enemy/spr_froglegs_0.png"),
+            texture: assetServer.load("enemy/spr_froglegs_0.png"),
             sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
-                translation: gml_to_bevy(enemy_base_x, enemy_base_y) + Vec3::new(0.0, 0.0, Z_ENEMY_BODY),
-                scale: Vec3::splat(enemy_scale), 
+                translation: gml_to_bevy(enemyBaseX, enemyBaseY) + Vec3::new(0.0, 0.0, Z_ENEMY_BODY),
+                scale: Vec3::splat(enemyScale), 
                 ..default()
             },
             ..default()
@@ -159,27 +195,27 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         Cleanup,
     ));
 
-    let head_y_offset = 22.0; 
-    let head_pos = gml_to_bevy(enemy_base_x, enemy_base_y - head_y_offset);
+    let headYOffset = 22.0; 
+    let headPos = gml_to_bevy(enemyBaseX, enemyBaseY - headYOffset);
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load("enemy/spr_froghead_0.png"),
+            texture: assetServer.load("enemy/spr_froghead_0.png"),
             sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
-                translation: head_pos + Vec3::new(0.0, 0.0, Z_ENEMY_HEAD),
-                scale: Vec3::splat(enemy_scale), 
+                translation: headPos + Vec3::new(0.0, 0.0, Z_ENEMY_HEAD),
+                scale: Vec3::splat(enemyScale), 
                 ..default()
             },
             ..default()
         },
-        EnemyHead { base_y: head_pos.y, timer: 0.0 },
+        EnemyHead { baseY: headPos.y, timer: 0.0 },
         EnemyBody, 
         Cleanup,
     ));
 
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load("heart/spr_heart_0.png"), 
+            texture: assetServer.load("heart/spr_heart_0.png"), 
             sprite: Sprite { color: Color::WHITE, custom_size: Some(Vec2::new(16.0, 16.0)), ..default() },
             transform: Transform::from_translation(gml_to_bevy(0.0, 0.0) + Vec3::new(0.0, 0.0, Z_SOUL)),
             ..default()
@@ -195,18 +231,18 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         (BTN_MERCY_X, "button/spr_sparebt_0.png", "button/spr_sparebt_1.png", 3),
     ];
 
-    for (x, normal_path, selected_path, idx) in buttons {
-        let normal_handle = asset_server.load(normal_path);
-        let selected_handle = asset_server.load(selected_path);
+    for (x, normalPath, selectedPath, idx) in buttons {
+        let normalHandle = assetServer.load(normalPath);
+        let selectedHandle = assetServer.load(selectedPath);
 
         commands.spawn((
             SpriteBundle {
-                texture: normal_handle.clone(),
+                texture: normalHandle.clone(),
                 sprite: Sprite { color: Color::WHITE, custom_size: Some(Vec2::new(110.0, 42.0)), ..default() },
                 transform: Transform::from_translation(gml_to_bevy(x + 55.0, BUTTON_Y_GML + 21.0) + Vec3::new(0.0, 0.0, Z_BUTTON)),
                 ..default()
             },
-            ButtonVisual { index: idx, normal_texture: normal_handle, selected_texture: selected_handle },
+            ButtonVisual { index: idx, normalTexture: normalHandle, selectedTexture: selectedHandle },
             Cleanup,
         ));
     }
@@ -230,12 +266,12 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         Cleanup,
     ));
 
-    let font_size = 23.0; 
-    let font_style = TextStyle { font: game_fonts.main.clone(), font_size, color: COLOR_UI_TEXT };
+    let fontSize = 23.0; 
+    let fontStyle = TextStyle { font: gameFonts.main.clone(), font_size: fontSize, color: COLOR_UI_TEXT };
 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("CHARA", font_style.clone()),
+            text: Text::from_section("CHARA", fontStyle.clone()),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(30.0, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
@@ -244,12 +280,12 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         Cleanup,
     ));
 
-    let lv_x = 30.0 + 85.0 + 15.0; 
+    let lvX = 30.0 + 85.0 + 15.0; 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("LV 1", font_style.clone()),
+            text: Text::from_section("LV 1", fontStyle.clone()),
             text_anchor: Anchor::TopLeft,
-            transform: Transform::from_translation(gml_to_bevy(lv_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
+            transform: Transform::from_translation(gml_to_bevy(lvX, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
         },
         LvText,
@@ -258,7 +294,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("HP", TextStyle { font: game_fonts.hp_label.clone(), font_size: 9.0, color: COLOR_UI_TEXT }),
+            text: Text::from_section("HP", TextStyle { font: gameFonts.hpLabel.clone(), font_size: 9.0, color: COLOR_UI_TEXT }),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(225.0, 405.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
@@ -266,13 +302,13 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         Cleanup,
     ));
 
-    let hp_bar_x = 250.0;
-    let hp_bar_y = 401.0;
+    let hpBarX = 250.0;
+    let hpBarY = 401.0;
 
     commands.spawn((
         SpriteBundle {
             sprite: Sprite { color: COLOR_HP_RED, anchor: Anchor::TopLeft, ..default() },
-            transform: Transform::from_translation(gml_to_bevy(hp_bar_x, hp_bar_y) + Vec3::new(0.0, 0.0, Z_HP_BAR_BG)),
+            transform: Transform::from_translation(gml_to_bevy(hpBarX, hpBarY) + Vec3::new(0.0, 0.0, Z_HP_BAR_BG)),
             ..default()
         },
         HpBarRed,
@@ -282,19 +318,19 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     commands.spawn((
         SpriteBundle {
             sprite: Sprite { color: COLOR_HP_YELLOW, anchor: Anchor::TopLeft, ..default() },
-            transform: Transform::from_translation(gml_to_bevy(hp_bar_x, hp_bar_y) + Vec3::new(0.0, 0.0, Z_HP_BAR_FG)),
+            transform: Transform::from_translation(gml_to_bevy(hpBarX, hpBarY) + Vec3::new(0.0, 0.0, Z_HP_BAR_FG)),
             ..default()
         },
         HpBarYellow,
         Cleanup,
     ));
 
-    let hp_text_x = 250.0 + 24.0 + 15.0;
+    let hpTextX = 250.0 + 24.0 + 15.0;
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("20 / 20", font_style),
+            text: Text::from_section("20 / 20", fontStyle),
             text_anchor: Anchor::TopLeft,
-            transform: Transform::from_translation(gml_to_bevy(hp_text_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
+            transform: Transform::from_translation(gml_to_bevy(hpTextX, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
             ..default()
         },
         HpText,
@@ -303,14 +339,14 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("", TextStyle { font: game_fonts.dialog.clone(), font_size: 32.0, color: Color::WHITE }),
+            text: Text::from_section("", TextStyle { font: gameFonts.dialog.clone(), font_size: 32.0, color: Color::WHITE }),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
             ..default()
         },
         Typewriter { 
-            full_text: "* Froggit hops close!".to_string(), 
-            visible_chars: 0, 
+            fullText: "* Froggit hops close!".to_string(), 
+            visibleChars: 0, 
             timer: Timer::from_seconds(0.03, TimerMode::Repeating), 
             finished: false 
         },
@@ -319,17 +355,16 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     ));
 }
 
-// 復活させた関数
-pub fn camera_scaling_system(
-    window_query: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    mut projection_query: Query<&mut OrthographicProjection, With<MainCamera>>,
+pub fn cameraScalingSystem(
+    windowQuery: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut projectionQuery: Query<&mut OrthographicProjection, With<MainCamera>>,
 ) {
-    if let Ok(window) = window_query.get_single() {
-        if let Ok(mut projection) = projection_query.get_single_mut() {
-            let target_ratio = 640.0 / 480.0;
-            let window_ratio = window.width() / window.height();
+    if let Ok(window) = windowQuery.get_single() {
+        if let Ok(mut projection) = projectionQuery.get_single_mut() {
+            let targetRatio = 640.0 / 480.0;
+            let windowRatio = window.width() / window.height();
 
-            if window_ratio > target_ratio {
+            if windowRatio > targetRatio {
                 projection.scaling_mode = bevy::render::camera::ScalingMode::FixedVertical(480.0);
             } else {
                 projection.scaling_mode = bevy::render::camera::ScalingMode::FixedHorizontal(640.0);

@@ -1,7 +1,7 @@
-def get_enemy_status():
+def getEnemyStatus():
     return {
-        "enemy_hp": 30,
-        "enemy_max_hp": 30,
-        "enemy_def": 0,
-        "attack_patterns": ["frog_jump"]
+        "enemyHp": 30,
+        "enemyMaxHp": 30,
+        "enemyDef": 0,
+        "attackPatterns": ["frogJump"]
     }

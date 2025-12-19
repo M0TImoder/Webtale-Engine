@@ -1,4 +1,4 @@
-def get_item_data():
+def getItemData():
     """
     アイテムの定義
     heal: 回復量
@@ -23,7 +23,7 @@ def get_item_data():
         }
     }
 
-def get_initial_inventory():
+def getInitialInventory():
     """初期インベントリの配置"""
     return [
         "Pie", 

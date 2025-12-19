@@ -1,11 +1,10 @@
-def get_player_status():
+def getPlayerStatus():
     return {
         "name": "CHARA",
         "lv": 1,
-        "max_hp": 20.0,
+        "maxHp": 20.0,
         "hp": 20.0,
-        
         "speed": 150.0,
         "attack": 20.0,
-        "invincibility_duration": 1.0,
+        "invincibilityDuration": 1.0,
     }
