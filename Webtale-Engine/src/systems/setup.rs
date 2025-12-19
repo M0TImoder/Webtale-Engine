@@ -49,6 +49,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         enemy_hp: 30,
         enemy_max_hp: 30,
         enemy_def: 0,
+        enemy_attacks: vec![],
 
         mnfight: 0, 
         myfight: 0,
@@ -67,15 +68,13 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     };
 
     let project_name = PROJECT_NAME;
-    let player_path = format!("projects/{}/properties/playerStatus.py", project_name);
+
     let mut item_dictionary = ItemDictionary::default();
     let item_path = format!("projects/{}/properties/item.py", project_name);
 
     if let Ok(script) = fs::read_to_string(&item_path) {
         Python::with_gil(|py| {
             if let Ok(module) = PyModule::from_code_bound(py, &script, "item.py", "item") {
-                
-                // アイテム定義(辞書)の読み込み
                 if let Ok(func) = module.getattr("get_item_data") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
@@ -92,7 +91,6 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
                     }
                 }
 
-                // 初期インベントリの読み込み (playerStatusの内容を上書き)
                 if let Ok(func) = module.getattr("get_initial_inventory") {
                     if let Ok(result) = func.call0() {
                         if let Ok(list) = result.downcast::<PyList>() {
@@ -108,7 +106,35 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         println!("Warning: Could not load {}", item_path);
     }
 
-    commands.insert_resource(item_dictionary); // リソースとして登録
+    let enemy_status_path = format!("projects/{}/properties/enemyStatus.py", project_name);
+    if let Ok(script) = fs::read_to_string(&enemy_status_path) {
+        Python::with_gil(|py| {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.py", "enemyStatus") {
+                if let Ok(func) = module.getattr("get_enemy_status") {
+                    if let Ok(result) = func.call0() {
+                        if let Ok(dict) = result.downcast::<PyDict>() {
+                            if let Some(hp) = dict.get_item("enemy_hp").ok().flatten().and_then(|v| v.extract().ok()) {
+                                game_state.enemy_hp = hp;
+                            }
+                            if let Some(max_hp) = dict.get_item("enemy_max_hp").ok().flatten().and_then(|v| v.extract().ok()) {
+                                game_state.enemy_max_hp = max_hp;
+                            }
+                            if let Some(def) = dict.get_item("enemy_def").ok().flatten().and_then(|v| v.extract().ok()) {
+                                game_state.enemy_def = def;
+                            }
+                            if let Some(attacks) = dict.get_item("attack_patterns").ok().flatten().and_then(|v| v.extract::<Vec<String>>().ok()) {
+                                game_state.enemy_attacks = attacks;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        println!("Warning: Could not load {}", enemy_status_path);
+    }
+
+    commands.insert_resource(item_dictionary);
     commands.insert_resource(game_state);
 
     let enemy_base_x = 320.0; 
@@ -293,6 +319,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     ));
 }
 
+// 復活させた関数
 pub fn camera_scaling_system(
     window_query: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut projection_query: Query<&mut OrthographicProjection, With<MainCamera>>,

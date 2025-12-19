@@ -100,8 +100,17 @@ pub fn combat_turn_manager(
         if game_state.turntimer < 0.0 {
             game_state.turntimer = 5.0;
             
+            let attack_patterns = &game_state.enemy_attacks;
+            let script_name = if !attack_patterns.is_empty() {
+                let mut rng = rand::thread_rng();
+                let idx = rng.gen_range(0..attack_patterns.len());
+                attack_patterns[idx].clone()
+            } else {
+                "frog_jump".to_string()
+            };
+            
             let relative_path = format!("projects/{}/danmaku", PROJECT_NAME);
-            let script_file_path = format!("{}/frog_jump.py", relative_path);
+            let script_file_path = format!("{}/{}.py", relative_path, script_name);
 
             let script_content = std::fs::read_to_string(&script_file_path).unwrap_or_default();
             
@@ -112,7 +121,7 @@ pub fn combat_turn_manager(
                 let env_path = std::env::current_dir().unwrap().join(relative_path);
                 let _ = path.call_method1("append", (env_path.to_str().unwrap(),));
 
-                let module = PyModule::from_code_bound(py, &script_content, "frog_jump.py", "frog_jump").expect("Failed to load python script");
+                let module = PyModule::from_code_bound(py, &script_content, &format!("{}.py", script_name), &script_name).expect("Failed to load python script");
                 
                 let init_func = module.getattr("init").expect("Failed to get init function");
                 let init_result = init_func.call0().expect("Failed to call init");
@@ -140,14 +149,14 @@ pub fn combat_turn_manager(
                         ..default()
                     },
                     PythonBullet {
-                        script_name: "frog_jump".to_string(),
+                        script_name: script_name.clone(),
                         bullet_data: bullet_obj,
                         damage: 4,
                     },
                     Cleanup,
                 ));
                 
-                scripts.modules.insert("frog_jump".to_string(), module.into());
+                scripts.modules.insert(script_name, module.into());
             });
         }
 

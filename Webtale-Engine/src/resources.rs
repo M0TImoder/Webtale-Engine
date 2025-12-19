@@ -30,6 +30,8 @@ pub struct GameState {
     pub enemy_hp: i32,
     pub enemy_max_hp: i32,
     pub enemy_def: i32,
+    
+    pub enemy_attacks: Vec<String>,
 
     pub mnfight: i32,
     pub myfight: i32,
