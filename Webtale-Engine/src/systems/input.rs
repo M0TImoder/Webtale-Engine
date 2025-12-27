@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::window::WindowMode;
 use bevy::app::AppExit;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
+use bevy::render::texture::{ImageSampler, ImageSamplerDescriptor, ImageFilterMode};
 use bevy::render::view::RenderLayers;
 use bevy::render::camera::RenderTarget;
 use bevy::window::WindowRef;
@@ -27,6 +28,7 @@ pub fn handleGlobalInput(
     mut eguiContexts: EguiContexts,
     mut editorPreviewTexture: ResMut<EditorPreviewTexture>,
     mut danmakuPreviewTexture: ResMut<DanmakuPreviewTexture>,
+    editorState: Res<EditorState>, 
 ) {
     if input.just_pressed(KeyCode::Escape) {
         exitWriter.send(AppExit::default());
@@ -75,17 +77,15 @@ pub fn handleGlobalInput(
                     title: "Danmaku Editor".to_string(),
                     resolution: (1280.0, 720.0).into(),
                     resizable: true,
-                    prevent_default_event_handling: false, 
+                    prevent_default_event_handling: false,
+                    ime_enabled: true, 
                     ..default()
                 },
                 EditorWindow,
             )).id();
 
-            let size = Extent3d {
-                width: 640,
-                height: 480,
-                ..default()
-            };
+            let size = Extent3d { width: 640, height: 480, ..default() };
+            
             let mut image = Image {
                 texture_descriptor: bevy::render::render_resource::TextureDescriptor {
                     label: Some("Preview Texture"),
@@ -94,17 +94,41 @@ pub fn handleGlobalInput(
                     format: TextureFormat::Bgra8UnormSrgb,
                     mip_level_count: 1,
                     sample_count: 1,
-                    usage: TextureUsages::TEXTURE_BINDING
-                        | TextureUsages::COPY_DST
-                        | TextureUsages::RENDER_ATTACHMENT,
+                    usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
                 },
+                sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                    mag_filter: ImageFilterMode::Nearest,
+                    min_filter: ImageFilterMode::Nearest,
+                    ..default()
+                }),
                 ..default()
             };
             image.resize(size);
             let imageHandle = images.add(image);
-
             editorPreviewTexture.0 = imageHandle.clone();
+
+            let mut previewImage = Image {
+                texture_descriptor: bevy::render::render_resource::TextureDescriptor {
+                    label: Some("Danmaku Preview Texture"),
+                    size,
+                    dimension: TextureDimension::D2,
+                    format: TextureFormat::Bgra8UnormSrgb,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                },
+                sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                    mag_filter: ImageFilterMode::Nearest,
+                    min_filter: ImageFilterMode::Nearest,
+                    ..default()
+                }),
+                ..default()
+            };
+            previewImage.resize(size);
+            let previewImageHandle = images.add(previewImage);
+            danmakuPreviewTexture.0 = previewImageHandle.clone();
 
             commands.spawn((
                 Camera2dBundle {
@@ -139,36 +163,6 @@ pub fn handleGlobalInput(
             ));
 
             commands.spawn((
-                SpriteBundle {
-                    texture: imageHandle,
-                    transform: Transform::from_xyz(0.0, 75.0, 0.0), 
-                    ..default()
-                },
-                RenderLayers::layer(1),
-                EditorWindow,
-                BattleScreenPreview,
-            ));
-
-            let mut previewImage = Image {
-                texture_descriptor: bevy::render::render_resource::TextureDescriptor {
-                    label: Some("Danmaku Preview Texture"),
-                    size,
-                    dimension: TextureDimension::D2,
-                    format: TextureFormat::Bgra8UnormSrgb,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    usage: TextureUsages::TEXTURE_BINDING
-                        | TextureUsages::COPY_DST
-                        | TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[],
-                },
-                ..default()
-            };
-            previewImage.resize(size);
-            let previewImageHandle = images.add(previewImage);
-            danmakuPreviewTexture.0 = previewImageHandle.clone();
-
-            commands.spawn((
                 Camera2dBundle {
                     camera: Camera {
                         target: RenderTarget::Image(previewImageHandle.clone()),
@@ -187,44 +181,123 @@ pub fn handleGlobalInput(
                 EditorWindow, 
             ));
 
-            let boxCenter = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
+            commands.spawn((
+                SpriteBundle {
+                    texture: imageHandle,
+                    transform: Transform::from_xyz(0.0, 75.0, 0.0), 
+                    ..default()
+                },
+                RenderLayers::layer(1),
+                EditorWindow,
+                BattleScreenPreview,
+            ));
+
+            commands.spawn((
+                SpriteBundle {
+                    texture: previewImageHandle,
+                    transform: Transform::from_xyz(0.0, 75.0, 0.0), 
+                    visibility: Visibility::Hidden,
+                    ..default()
+                },
+                RenderLayers::layer(1),
+                EditorWindow,
+                EditorPreviewElement,
+                BattleScreenPreview,
+            ));
+
+            let boxMinX = 32.0;
+            let boxMaxX = 602.0;
+            let boxMinY = 250.0;
+            let boxMaxY = 385.0;
             
+            let bevyLeft = ORIGIN_X + boxMinX;
+            let bevyRight = ORIGIN_X + boxMaxX;
+            let bevyTop = ORIGIN_Y - boxMinY;
+            let bevyBottom = ORIGIN_Y - boxMaxY;
+            
+            let width = bevyRight - bevyLeft;
+            let height = bevyTop - bevyBottom;
+            let centerX = bevyLeft + width / 2.0;
+            let centerY = bevyBottom + height / 2.0;
+
             commands.spawn((
                 SpriteBundle {
                     sprite: Sprite {
                         color: Color::WHITE,
-                        custom_size: Some(Vec2::new(570.0, 135.0)), 
+                        custom_size: Some(Vec2::new(width + 10.0, height + 10.0)), 
                         ..default()
                     },
-                    transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 0.0)),
+                    transform: Transform::from_translation(Vec3::new(centerX, centerY, Z_BORDER)),
                     ..default()
                 },
                 RenderLayers::layer(2),
                 EditorWindow,
+                EditorPreviewElement,
             ));
             
             commands.spawn((
                 SpriteBundle {
                     sprite: Sprite {
                         color: Color::BLACK,
-                        custom_size: Some(Vec2::new(560.0, 125.0)), 
+                        custom_size: Some(Vec2::new(width, height)), 
                         ..default()
                     },
-                    transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 1.0)),
+                    transform: Transform::from_translation(Vec3::new(centerX, centerY, Z_BG)),
                     ..default()
                 },
                 RenderLayers::layer(2),
                 EditorWindow,
+                EditorPreviewElement,
             ));
 
             commands.spawn((
                 SpriteBundle {
                     texture: assetServer.load("player/spr_soul_0.png"),
-                    transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 2.0)),
+                    sprite: Sprite { color: Color::WHITE, custom_size: Some(Vec2::new(16.0, 16.0)), ..default() },
+                    transform: Transform::from_translation(Vec3::new(centerX, centerY, Z_SOUL)),
                     ..default()
                 },
                 RenderLayers::layer(2),
                 EditorWindow,
+                EditorPreviewElement,
+            ));
+
+            let buttons = [
+                (BTN_FIGHT_X, "button/spr_fightbt_0.png"),
+                (BTN_ACT_X,   "button/spr_actbt_center_0.png"),
+                (BTN_ITEM_X,  "button/spr_itembt_0.png"),
+                (BTN_MERCY_X, "button/spr_sparebt_0.png"),
+            ];
+
+            for (x, path) in buttons {
+                commands.spawn((
+                    SpriteBundle {
+                        texture: assetServer.load(path),
+                        sprite: Sprite { color: Color::WHITE, custom_size: Some(Vec2::new(110.0, 42.0)), ..default() },
+                        transform: Transform::from_translation(gml_to_bevy(x + 55.0, BUTTON_Y_GML + 21.0) + Vec3::new(0.0, 0.0, Z_BUTTON)),
+                        ..default()
+                    },
+                    RenderLayers::layer(2),
+                    EditorWindow,
+                    EditorPreviewElement,
+                    EditorPreviewUI, 
+                ));
+            }
+
+            commands.spawn((
+                Text2dBundle {
+                    text: Text::from_section(
+                        editorState.previewText.clone(), 
+                        TextStyle { font: gameFonts.dialog.clone(), font_size: 32.0, color: Color::WHITE }
+                    ),
+                    text_anchor: Anchor::TopLeft,
+                    transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
+                    ..default()
+                },
+                RenderLayers::layer(2),
+                EditorWindow,
+                EditorPreviewElement,
+                EditorPreviewText,
             ));
         }
     }

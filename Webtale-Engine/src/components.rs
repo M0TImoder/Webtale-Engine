@@ -108,3 +108,12 @@ pub struct PythonBullet {
 
 #[derive(Component)]
 pub struct BattleScreenPreview;
+
+#[derive(Component)]
+pub struct EditorPreviewElement;
+
+#[derive(Component)]
+pub struct EditorPreviewUI;
+
+#[derive(Component)]
+pub struct EditorPreviewText;

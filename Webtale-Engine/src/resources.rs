@@ -63,7 +63,8 @@ pub struct GameFonts {
     pub main: Handle<Font>,
     pub dialog: Handle<Font>,
     pub hpLabel: Handle<Font>,
-    pub damage: Handle<Font>, 
+    pub damage: Handle<Font>,
+    pub japanese: Handle<Font>, 
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
@@ -73,9 +74,29 @@ pub enum EditorTab {
     DanmakuPreview,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct EditorState {
     pub currentTab: EditorTab,
+    pub showText: bool,
+    pub showUI: bool,
+    pub previewText: String,
+    pub useJapaneseFont: bool,
+    pub isEditingText: bool,
+    pub tempEditingText: String,
+}
+
+impl Default for EditorState {
+    fn default() -> Self {
+        Self {
+            currentTab: EditorTab::Battle,
+            showText: true,
+            showUI: true,
+            previewText: "* Text edit mode.".to_string(),
+            useJapaneseFont: false,
+            isEditingText: false,
+            tempEditingText: String::new(),
+        }
+    }
 }
 
 #[derive(Resource, Default)]

@@ -21,12 +21,14 @@ pub fn setup(
     let fontDialog = assetServer.load("font/8bitOperatorPlus-Bold.ttf");
     let fontHpLabel = assetServer.load("font/8-BIT_WO.ttf");
     let fontDamage = assetServer.load("font/hachicro.TTF");
+    let fontJapanese = assetServer.load("font/jf14-regular.ttf");
 
     let gameFonts = GameFonts {
         main: fontMain.clone(),
         dialog: fontDialog.clone(),
         hpLabel: fontHpLabel.clone(),
-        damage: fontDamage.clone(), 
+        damage: fontDamage.clone(),
+        japanese: fontJapanese.clone(),
     };
 
     spawnGameObjects(&mut commands, &assetServer, &gameFonts);

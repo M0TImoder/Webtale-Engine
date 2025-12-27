@@ -41,7 +41,7 @@ fn main() {
         .init_resource::<EditorPreviewTexture>()
         .init_resource::<DanmakuPreviewTexture>()
         .init_resource::<DanmakuScripts>()
-        .add_systems(Startup, setup::setup)
+        .add_systems(Startup, (setup::setup, editor::configureEguiFonts))
         .add_systems(Update, (
             input::handleGlobalInput,
             setup::cameraScalingSystem,
