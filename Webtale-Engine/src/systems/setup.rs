@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyDict;
+use std::collections::HashMap;
 use std::fs;
 use crate::components::*;
 use crate::resources::*;
@@ -40,18 +41,31 @@ pub fn setup(
 
 pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, gameFonts: &GameFonts) {
     let mut gameState = GameState {
-        hp: 20.0,
-        maxHp: 20.0,
+        hp: 0.0,
+        maxHp: 0.0,
         lv: 1,
-        name: "CHARA".to_string(),
+        name: String::new(),
         
-        speed: 150.0,
-        attack: 20.0,
-        invincibilityDuration: 1.0,
+        speed: 0.0,
+        attack: 0.0,
+        defense: 0.0,
+        invincibilityDuration: 0.0,
 
-        enemyHp: 30,
-        enemyMaxHp: 30,
+        enemyHp: 0,
+        enemyMaxHp: 0,
+        enemyAtk: 0,
         enemyDef: 0,
+        enemyName: String::new(),
+        enemyDialogText: String::new(),
+        enemyActCommands: vec![],
+        enemyActTexts: HashMap::new(),
+        enemyBubbleMessages: vec![],
+        enemyBodyTexture: String::new(),
+        enemyHeadTexture: String::new(),
+        enemyHeadYOffset: 0.0,
+        enemyBaseX: 0.0,
+        enemyBaseY: 0.0,
+        enemyScale: 1.0,
         enemyAttacks: vec![],
 
         mnFight: 0, 
@@ -60,9 +74,10 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         menuCoords: vec![0; 11],
 
         inventory: vec![],
+        equippedItems: vec![],
         itemPage: 0,
         
-        dialogText: "* Froggit hops close!".to_string(),
+        dialogText: String::new(),
         
         bubbleTimer: Timer::from_seconds(3.0, TimerMode::Once),
         damageDisplayTimer: Timer::from_seconds(1.0, TimerMode::Once),
@@ -72,34 +87,112 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
 
     let projectName = PROJECT_NAME;
 
+    let readString = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<String> {
+        match dict.get_item(key) {
+            Ok(Some(value)) => match value.extract::<String>() {
+                Ok(result) => Some(result),
+                Err(err) => {
+                    println!("Warning: {} {} {}", label, key, err);
+                    None
+                }
+            },
+            Ok(None) => {
+                println!("Warning: {} missing {}", label, key);
+                None
+            }
+            Err(err) => {
+                println!("Warning: {} {} {}", label, key, err);
+                None
+            }
+        }
+    };
+
+    let readF32 = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<f32> {
+        match dict.get_item(key) {
+            Ok(Some(value)) => match value.extract::<f32>() {
+                Ok(result) => Some(result),
+                Err(err) => {
+                    println!("Warning: {} {} {}", label, key, err);
+                    None
+                }
+            },
+            Ok(None) => {
+                println!("Warning: {} missing {}", label, key);
+                None
+            }
+            Err(err) => {
+                println!("Warning: {} {} {}", label, key, err);
+                None
+            }
+        }
+    };
+
+    let readI32 = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<i32> {
+        match dict.get_item(key) {
+            Ok(Some(value)) => match value.extract::<i32>() {
+                Ok(result) => Some(result),
+                Err(err) => {
+                    println!("Warning: {} {} {}", label, key, err);
+                    None
+                }
+            },
+            Ok(None) => {
+                println!("Warning: {} missing {}", label, key);
+                None
+            }
+            Err(err) => {
+                println!("Warning: {} {} {}", label, key, err);
+                None
+            }
+        }
+    };
+
+    let readVecString = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<Vec<String>> {
+        match dict.get_item(key) {
+            Ok(Some(value)) => match value.extract::<Vec<String>>() {
+                Ok(result) => Some(result),
+                Err(err) => {
+                    println!("Warning: {} {} {}", label, key, err);
+                    None
+                }
+            },
+            Ok(None) => {
+                println!("Warning: {} missing {}", label, key);
+                None
+            }
+            Err(err) => {
+                println!("Warning: {} {} {}", label, key, err);
+                None
+            }
+        }
+    };
+
     let mut itemDictionary = ItemDictionary::default();
-    let itemPath = format!("projects/{}/properties/item.py", projectName);
+    let itemPath = format!("projects/{}/properties/item.wep", projectName);
 
     if let Ok(script) = fs::read_to_string(&itemPath) {
         Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "item.py", "item") {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "item.wep", "item") {
                 if let Ok(func) = module.getattr("getItemData") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
                             for (key, value) in dict.iter() {
-                                let itemName: String = key.extract().unwrap_or_default();
+                                let itemName: String = match key.extract() {
+                                    Ok(name) => name,
+                                    Err(err) => {
+                                        println!("Warning: itemData key {}", err);
+                                        continue;
+                                    }
+                                };
                                 if let Ok(data) = value.downcast::<PyDict>() {
-                                    let heal: i32 = data.get_item("heal").ok().flatten().and_then(|v| v.extract().ok()).unwrap_or(0);
-                                    let text: String = data.get_item("text").ok().flatten().and_then(|v| v.extract().ok()).unwrap_or_default();
+                                    let heal = readI32(data, "heal", "itemData").unwrap_or(0);
+                                    let attack = readI32(data, "attack", "itemData").unwrap_or(0);
+                                    let defense = readI32(data, "defense", "itemData").unwrap_or(0);
+                                    let text = readString(data, "text", "itemData").unwrap_or_default();
                                     
-                                    itemDictionary.0.insert(itemName, ItemInfo { healAmount: heal, text });
+                                    itemDictionary.0.insert(itemName, ItemInfo { healAmount: heal, attack, defense, text });
                                 }
                             }
-                        }
-                    }
-                }
-
-                if let Ok(func) = module.getattr("getInitialInventory") {
-                    if let Ok(result) = func.call0() {
-                        if let Ok(list) = result.downcast::<PyList>() {
-                             if let Ok(inv) = list.extract() {
-                                 gameState.inventory = inv;
-                             }
                         }
                     }
                 }
@@ -109,33 +202,42 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         println!("Warning: Could not load {}", itemPath);
     }
 
-    let playerStatusPath = format!("projects/{}/properties/playerStatus.py", projectName);
+    let playerStatusPath = format!("projects/{}/properties/playerStatus.wep", projectName);
     if let Ok(script) = fs::read_to_string(&playerStatusPath) {
         Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "playerStatus.py", "playerStatus") {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "playerStatus.wep", "playerStatus") {
                 if let Ok(func) = module.getattr("getPlayerStatus") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
-                            if let Some(name) = dict.get_item("name").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(name) = readString(dict, "name", "playerStatus") {
                                 gameState.name = name;
                             }
-                            if let Some(lv) = dict.get_item("lv").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(lv) = readI32(dict, "lv", "playerStatus") {
                                 gameState.lv = lv;
                             }
-                            if let Some(maxHp) = dict.get_item("maxHp").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(maxHp) = readF32(dict, "maxHp", "playerStatus") {
                                 gameState.maxHp = maxHp;
                             }
-                            if let Some(hp) = dict.get_item("hp").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(hp) = readF32(dict, "hp", "playerStatus") {
                                 gameState.hp = hp;
                             }
-                            if let Some(speed) = dict.get_item("speed").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(speed) = readF32(dict, "speed", "playerStatus") {
                                 gameState.speed = speed;
                             }
-                            if let Some(attack) = dict.get_item("attack").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(attack) = readF32(dict, "attack", "playerStatus") {
                                 gameState.attack = attack;
                             }
-                            if let Some(invDur) = dict.get_item("invincibilityDuration").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(defense) = readF32(dict, "defense", "playerStatus") {
+                                gameState.defense = defense;
+                            }
+                            if let Some(invDur) = readF32(dict, "invincibilityDuration", "playerStatus") {
                                 gameState.invincibilityDuration = invDur;
+                            }
+                            if let Some(inventory) = readVecString(dict, "inventory", "playerStatus") {
+                                gameState.inventory = inventory;
+                            }
+                            if let Some(equippedItems) = readVecString(dict, "equippedItems", "playerStatus") {
+                                gameState.equippedItems = equippedItems;
                             }
                         }
                     }
@@ -146,24 +248,104 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         println!("Warning: Could not load {}", playerStatusPath);
     }
 
-    let enemyStatusPath = format!("projects/{}/properties/enemyStatus.py", projectName);
+    if gameState.name.is_empty() {
+        println!("Warning: playerStatus missing name");
+    }
+
+    if gameState.maxHp <= 0.0 {
+        println!("Warning: playerStatus maxHp invalid");
+        gameState.maxHp = 1.0;
+    }
+
+    if gameState.hp <= 0.0 {
+        println!("Warning: playerStatus hp invalid");
+        gameState.hp = gameState.maxHp;
+    }
+
+    if gameState.speed <= 0.0 {
+        println!("Warning: playerStatus speed invalid");
+    }
+
+    if gameState.invincibilityDuration <= 0.0 {
+        println!("Warning: playerStatus invincibilityDuration invalid");
+    }
+
+    let enemyStatusPath = format!("projects/{}/properties/enemyStatus.wep", projectName);
     if let Ok(script) = fs::read_to_string(&enemyStatusPath) {
         Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.py", "enemyStatus") {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.wep", "enemyStatus") {
                 if let Ok(func) = module.getattr("getEnemyStatus") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
-                            if let Some(hp) = dict.get_item("enemyHp").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(hp) = readI32(dict, "enemyHp", "enemyStatus") {
                                 gameState.enemyHp = hp;
                             }
-                            if let Some(maxHp) = dict.get_item("enemyMaxHp").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(maxHp) = readI32(dict, "enemyMaxHp", "enemyStatus") {
                                 gameState.enemyMaxHp = maxHp;
                             }
-                            if let Some(def) = dict.get_item("enemyDef").ok().flatten().and_then(|v| v.extract().ok()) {
+                            if let Some(atk) = readI32(dict, "enemyAtk", "enemyStatus") {
+                                gameState.enemyAtk = atk;
+                            }
+                            if let Some(def) = readI32(dict, "enemyDef", "enemyStatus") {
                                 gameState.enemyDef = def;
                             }
-                            if let Some(attacks) = dict.get_item("attackPatterns").ok().flatten().and_then(|v| v.extract::<Vec<String>>().ok()) {
+                            if let Some(name) = readString(dict, "enemyName", "enemyStatus") {
+                                gameState.enemyName = name;
+                            }
+                            if let Some(dialogText) = readString(dict, "dialogText", "enemyStatus") {
+                                gameState.enemyDialogText = dialogText;
+                            }
+                            if let Some(attacks) = readVecString(dict, "attackPatterns", "enemyStatus") {
                                 gameState.enemyAttacks = attacks;
+                            }
+                            if let Some(commands) = readVecString(dict, "actCommands", "enemyStatus") {
+                                gameState.enemyActCommands = commands;
+                            }
+                            if let Ok(Some(actTextsObj)) = dict.get_item("actTexts") {
+                                if let Ok(actTexts) = actTextsObj.downcast::<PyDict>() {
+                                    for (key, value) in actTexts.iter() {
+                                        let command: String = match key.extract() {
+                                            Ok(name) => name,
+                                            Err(err) => {
+                                                println!("Warning: enemyStatus actTexts key {}", err);
+                                                continue;
+                                            }
+                                        };
+                                        let text: String = match value.extract() {
+                                            Ok(result) => result,
+                                            Err(err) => {
+                                                println!("Warning: enemyStatus actTexts value {}", err);
+                                                continue;
+                                            }
+                                        };
+                                        gameState.enemyActTexts.insert(command, text);
+                                    }
+                                } else {
+                                    println!("Warning: enemyStatus actTexts not dict");
+                                }
+                            } else {
+                                println!("Warning: enemyStatus missing actTexts");
+                            }
+                            if let Some(messages) = readVecString(dict, "bubbleMessages", "enemyStatus") {
+                                gameState.enemyBubbleMessages = messages;
+                            }
+                            if let Some(bodyTexture) = readString(dict, "bodyTexture", "enemyStatus") {
+                                gameState.enemyBodyTexture = bodyTexture;
+                            }
+                            if let Some(headTexture) = readString(dict, "headTexture", "enemyStatus") {
+                                gameState.enemyHeadTexture = headTexture;
+                            }
+                            if let Some(headYOffset) = readF32(dict, "headYOffset", "enemyStatus") {
+                                gameState.enemyHeadYOffset = headYOffset;
+                            }
+                            if let Some(baseX) = readF32(dict, "baseX", "enemyStatus") {
+                                gameState.enemyBaseX = baseX;
+                            }
+                            if let Some(baseY) = readF32(dict, "baseY", "enemyStatus") {
+                                gameState.enemyBaseY = baseY;
+                            }
+                            if let Some(scale) = readF32(dict, "scale", "enemyStatus") {
+                                gameState.enemyScale = scale;
                             }
                         }
                     }
@@ -174,16 +356,39 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         println!("Warning: Could not load {}", enemyStatusPath);
     }
 
-    commands.insert_resource(itemDictionary);
-    commands.insert_resource(gameState);
+    if gameState.enemyMaxHp <= 0 {
+        println!("Warning: enemyMaxHp invalid");
+        gameState.enemyMaxHp = 1;
+    }
 
-    let enemyBaseX = 320.0; 
-    let enemyBaseY = 160.0; 
-    let enemyScale = 1.0; 
+    if gameState.enemyName.is_empty() {
+        println!("Warning: enemyStatus missing enemyName");
+    }
+
+    if gameState.enemyBodyTexture.is_empty() {
+        println!("Warning: enemyStatus missing bodyTexture");
+    }
+
+    if gameState.enemyHeadTexture.is_empty() {
+        println!("Warning: enemyStatus missing headTexture");
+    }
+
+    if !gameState.enemyDialogText.is_empty() {
+        gameState.dialogText = gameState.enemyDialogText.clone();
+    }
+
+    let enemyBaseX = gameState.enemyBaseX; 
+    let enemyBaseY = gameState.enemyBaseY; 
+    let enemyScale = if gameState.enemyScale <= 0.0 {
+        println!("Warning: enemyStatus scale invalid");
+        1.0
+    } else {
+        gameState.enemyScale
+    }; 
 
     commands.spawn((
         SpriteBundle {
-            texture: assetServer.load("enemy/spr_froglegs_0.png"),
+            texture: assetServer.load(&gameState.enemyBodyTexture),
             sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
                 translation: gml_to_bevy(enemyBaseX, enemyBaseY) + Vec3::new(0.0, 0.0, Z_ENEMY_BODY),
@@ -194,16 +399,16 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         },
         EnemyBody, 
         ActCommands {
-            commands: vec!["Check".to_string(), "Compliment".to_string(), "Threaten".to_string()],
+            commands: gameState.enemyActCommands.clone(),
         },
         Cleanup,
     ));
 
-    let headYOffset = 22.0; 
+    let headYOffset = gameState.enemyHeadYOffset; 
     let headPos = gml_to_bevy(enemyBaseX, enemyBaseY - headYOffset);
     commands.spawn((
         SpriteBundle {
-            texture: assetServer.load("enemy/spr_froghead_0.png"),
+            texture: assetServer.load(&gameState.enemyHeadTexture),
             sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
                 translation: headPos + Vec3::new(0.0, 0.0, Z_ENEMY_HEAD),
@@ -275,7 +480,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("CHARA", fontStyle.clone()),
+            text: Text::from_section(&gameState.name, fontStyle.clone()),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(30.0, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
@@ -287,7 +492,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
     let lvX = 30.0 + 85.0 + 15.0; 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("LV 1", fontStyle.clone()),
+            text: Text::from_section(format!("LV {}", gameState.lv), fontStyle.clone()),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(lvX, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
@@ -332,7 +537,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
     let hpTextX = 250.0 + 24.0 + 15.0;
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("20 / 20", fontStyle),
+            text: Text::from_section(format!("{:.0} / {:.0}", gameState.hp, gameState.maxHp), fontStyle),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(hpTextX, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
             ..default()
@@ -349,7 +554,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
             ..default()
         },
         Typewriter { 
-            fullText: "* Froggit hops close!".to_string(), 
+            fullText: gameState.dialogText.clone(), 
             visibleChars: 0, 
             timer: Timer::from_seconds(0.03, TimerMode::Repeating), 
             finished: false 
@@ -357,6 +562,9 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         MainDialogText,
         Cleanup,
     ));
+
+    commands.insert_resource(itemDictionary);
+    commands.insert_resource(gameState);
 }
 
 pub fn cameraScalingSystem(

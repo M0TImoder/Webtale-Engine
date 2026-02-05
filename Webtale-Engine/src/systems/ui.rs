@@ -42,9 +42,10 @@ pub fn menuRenderSystem(
         let startY = 270.0;
 
         if layer == MENU_LAYER_FIGHT_TARGET || layer == MENU_LAYER_ACT_TARGET {
+            let enemyName = if gameState.enemyName.is_empty() { "Enemy" } else { &gameState.enemyName };
             commands.spawn((
                 Text2dBundle {
-                    text: Text::from_section("* Froggit", fontStyle.clone()),
+                    text: Text::from_section(format!("* {}", enemyName), fontStyle.clone()),
                     text_anchor: Anchor::TopLeft,
                     transform: Transform::from_translation(gml_to_bevy(startX, startY) + Vec3::new(0.0, 0.0, Z_TEXT)),
                     ..default()
@@ -263,7 +264,10 @@ pub fn animateText(
     }
 }
 
-pub fn animateEnemyHead(time: Res<Time>, mut query: Query<(&mut Transform, &mut EnemyHead)>) {
+pub fn animateEnemyHead(
+    time: Res<Time>,
+    mut query: Query<(&mut Transform, &mut EnemyHead)>,
+) {
     for (mut transform, mut head) in query.iter_mut() {
         head.timer += time.delta_seconds();
         let offset = (head.timer * 2.0).sin() * 2.0; 

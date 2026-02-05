@@ -5,6 +5,8 @@ use std::collections::HashMap;
 #[derive(Clone, Debug)]
 pub struct ItemInfo {
     pub healAmount: i32,
+    pub attack: i32,
+    pub defense: i32,
     pub text: String,
 }
 
@@ -25,11 +27,24 @@ pub struct GameState {
 
     pub speed: f32,
     pub attack: f32,
+    pub defense: f32,
     pub invincibilityDuration: f32,
-    
+
     pub enemyHp: i32,
     pub enemyMaxHp: i32,
+    pub enemyAtk: i32,
     pub enemyDef: i32,
+    pub enemyName: String,
+    pub enemyDialogText: String,
+    pub enemyActCommands: Vec<String>,
+    pub enemyActTexts: HashMap<String, String>,
+    pub enemyBubbleMessages: Vec<String>,
+    pub enemyBodyTexture: String,
+    pub enemyHeadTexture: String,
+    pub enemyHeadYOffset: f32,
+    pub enemyBaseX: f32,
+    pub enemyBaseY: f32,
+    pub enemyScale: f32,
     
     pub enemyAttacks: Vec<String>,
 
@@ -40,6 +55,7 @@ pub struct GameState {
     pub menuCoords: Vec<i32>,
 
     pub inventory: Vec<String>,
+    pub equippedItems: Vec<String>,
     pub itemPage: usize,
 
     pub dialogText: String,

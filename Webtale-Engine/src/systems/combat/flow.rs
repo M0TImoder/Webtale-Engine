@@ -48,8 +48,13 @@ pub fn battleFlowControl(
                 SpeechBubble,
                 Cleanup,
             ));
-            let messages = ["Ribbit, ribbit.", "Croak.", "Hop, hop."];
-            let msg = messages[rand::thread_rng().gen_range(0..messages.len())];
+            let msg = if gameState.enemyBubbleMessages.is_empty() {
+                println!("Warning: enemy bubble messages missing");
+                "...".to_string()
+            } else {
+                let idx = rand::thread_rng().gen_range(0..gameState.enemyBubbleMessages.len());
+                gameState.enemyBubbleMessages[idx].clone()
+            };
             commands.spawn((
                 Text2dBundle {
                     text: Text::from_section("", TextStyle { font: gameFonts.dialog.clone(), font_size: 24.0, color: Color::BLACK }),
@@ -57,7 +62,7 @@ pub fn battleFlowControl(
                     transform: Transform::from_translation(gml_to_bevy(bubbleX + 15.0, bubbleY + 15.0) + Vec3::new(0.0, 0.0, Z_BUBBLE_TEXT)),
                     ..default()
                 },
-                Typewriter { fullText: msg.to_string(), visibleChars: 0, timer: Timer::from_seconds(0.05, TimerMode::Repeating), finished: false },
+                Typewriter { fullText: msg, visibleChars: 0, timer: Timer::from_seconds(0.05, TimerMode::Repeating), finished: false },
                 SpeechBubble, 
                 Cleanup,
             ));
@@ -106,41 +111,169 @@ pub fn combatTurnManager(
                 let idx = rng.gen_range(0..attackPatterns.len());
                 attackPatterns[idx].clone()
             } else {
+                println!("Warning: enemyStatus attackPatterns missing");
                 "frogJump".to_string() 
             };
             
             let relativePath = format!("projects/{}/danmaku", PROJECT_NAME);
-            let scriptFilePath = format!("{}/{}.py", relativePath, scriptName);
+            let scriptFilePath = format!("{}/{}.wep", relativePath, scriptName);
 
-            let scriptContent = std::fs::read_to_string(&scriptFilePath).unwrap_or_default();
+            let scriptContent = match std::fs::read_to_string(&scriptFilePath) {
+                Ok(content) => content,
+                Err(err) => {
+                    println!("Warning: script load {} {}", scriptFilePath, err);
+                    String::new()
+                }
+            };
             
             Python::with_gil(|py| {
                 let sys = PyModule::import_bound(py, "sys").expect("Failed to import sys");
                 let path = sys.getattr("path").expect("Failed to get sys.path");
                 
-                let envPath = std::env::current_dir().unwrap().join(relativePath);
+                let envPath = std::env::current_dir().unwrap().join(&relativePath);
                 let _ = path.call_method1("append", (envPath.to_str().unwrap(),));
 
-                let module = PyModule::from_code_bound(py, &scriptContent, &format!("{}.py", scriptName), &scriptName).expect("Failed to load python script");
-                
-                let initFunc = module.getattr("init").expect("Failed to get init function");
-                let initResult = initFunc.call0().expect("Failed to call init");
-                let initData: &Bound<PyDict> = initResult.downcast().expect("init should return dict");
-                
-                let boxDataObj = initData.get_item("box").expect("box missing").expect("box None");
-                let _boxData: Vec<f32> = boxDataObj.extract().expect("box format error");
+                let apiPath = format!("{}/api.wep", relativePath);
+                let apiContent = match std::fs::read_to_string(&apiPath) {
+                    Ok(content) => content,
+                    Err(err) => {
+                        println!("Warning: script load {} {}", apiPath, err);
+                        String::new()
+                    }
+                };
 
-                let texturePathObj = initData.get_item("textureWait").expect("textureWait missing").expect("textureWait None");
-                let texturePath: String = texturePathObj.extract().unwrap();
+                if apiContent.is_empty() {
+                    return;
+                }
+
+                let apiModule = match PyModule::from_code_bound(py, &apiContent, "api.wep", "api") {
+                    Ok(module) => module,
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+
+                let modules = match sys.getattr("modules") {
+                    Ok(modules) => modules,
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+                if let Err(err) = modules.set_item("api", &apiModule) {
+                    err.print(py);
+                    return;
+                }
+
+                if scriptContent.is_empty() {
+                    return;
+                }
+
+                let module = match PyModule::from_code_bound(py, &scriptContent, &format!("{}.wep", scriptName), &scriptName) {
+                    Ok(module) => module,
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+                
+                let initFunc = match module.getattr("init") {
+                    Ok(func) => func,
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+                let initResult = match initFunc.call0() {
+                    Ok(result) => result,
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+                let initData: &Bound<PyDict> = match initResult.downcast() {
+                    Ok(result) => result,
+                    Err(err) => {
+                        println!("Warning: danmaku init {}", err);
+                        return;
+                    }
+                };
+                
+                let boxDataObj = match initData.get_item("box") {
+                    Ok(Some(value)) => value,
+                    Ok(None) => {
+                        println!("Warning: danmaku box missing");
+                        return;
+                    }
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+                let _boxData: Vec<f32> = match boxDataObj.extract() {
+                    Ok(value) => value,
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+
+                let texturePathObj = match initData.get_item("textureWait") {
+                    Ok(Some(value)) => value,
+                    Ok(None) => {
+                        println!("Warning: danmaku textureWait missing");
+                        return;
+                    }
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+                let texturePath: String = match texturePathObj.extract() {
+                    Ok(value) => value,
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
                 
                 let spawnX = ORIGIN_X + battleBox.current.max.x - 40.0;
                 let spawnY = ORIGIN_Y - battleBox.current.max.y + 40.0;
 
-                let spawnFunc = module.getattr("spawn").expect("Failed to get spawn function");
-                let bulletObj: PyObject = spawnFunc.call0().expect("Failed to call spawn").into();
+                let spawnFunc = match module.getattr("spawn") {
+                    Ok(func) => func,
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
+                let bulletObj: PyObject = match spawnFunc.call0() {
+                    Ok(result) => result.into(),
+                    Err(err) => {
+                        err.print(py);
+                        return;
+                    }
+                };
                 
                 let bulletBound = bulletObj.bind(py);
-                let _ = bulletBound.call_method1("setPos", (spawnX, spawnY));
+                if let Err(err) = bulletBound.call_method1("setPos", (spawnX, spawnY)) {
+                    err.print(py);
+                }
+
+                let damage = match bulletBound.getattr("damage") {
+                    Ok(value) => match value.extract::<i32>() {
+                        Ok(result) => result,
+                        Err(err) => {
+                            println!("Warning: bullet damage {}", err);
+                            0
+                        }
+                    },
+                    Err(err) => {
+                        println!("Warning: bullet damage {}", err);
+                        0
+                    }
+                };
 
                 commands.spawn((
                     SpriteBundle {
@@ -151,11 +284,12 @@ pub fn combatTurnManager(
                     PythonBullet {
                         scriptName: scriptName.clone(),
                         bulletData: bulletObj,
-                        damage: 4,
+                        damage,
                     },
                     Cleanup,
                 ));
                 
+                scripts.modules.insert("api".to_string(), apiModule.into());
                 scripts.modules.insert(scriptName, module.into());
             });
         }
@@ -174,7 +308,7 @@ pub fn combatTurnManager(
         gameState.mnFight = 0;
         gameState.myFight = 0;
         gameState.menuLayer = 0;
-        gameState.dialogText = "* Froggit hops close!".to_string(); 
+        gameState.dialogText = gameState.enemyDialogText.clone(); 
         
         battleBox.target = Rect::new(32.0, 250.0, 602.0, 385.0);
     }

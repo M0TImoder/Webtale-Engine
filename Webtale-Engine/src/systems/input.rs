@@ -439,12 +439,16 @@ pub fn menuInputSystem(
                 if let Some(acts) = actCommandsQuery.iter().next() {
                     if actIdx < acts.commands.len() {
                         let cmdName = &acts.commands[actIdx];
-                        if cmdName == "Check" {
-                            textToDisplay = "* FROGGIT - ATK 4 DEF 5\n* Life is difficult for this enemy.".to_string();
-                        } else if cmdName == "Compliment" {
-                            textToDisplay = "* Froggit didn't understand what you said,\n  but was flattered anyway.".to_string();
-                        } else if cmdName == "Threaten" {
-                            textToDisplay = "* Froggit didn't understand what you said,\n  but was scared anyway.".to_string();
+                        if let Some(text) = gameState.enemyActTexts.get(cmdName) {
+                            textToDisplay = text.clone();
+                        } else if cmdName == "Check" {
+                            let enemyName = if gameState.enemyName.is_empty() { "ENEMY".to_string() } else { gameState.enemyName.to_uppercase() };
+                            textToDisplay = format!(
+                                "* {} - ATK {} DEF {}\n* ...",
+                                enemyName,
+                                gameState.enemyAtk,
+                                gameState.enemyDef
+                            );
                         }
                     }
                 }
