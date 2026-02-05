@@ -25,8 +25,10 @@ fn main() {
                         resizable: true,
                         canvas: Some("#bevy".to_string()),
                         prevent_default_event_handling: false,
+                        visible: false,
                         ..default()
                     }),
+                    close_when_requested: false,
                     ..default()
                 })
                 .set(ImagePlugin::default_nearest()),
@@ -41,7 +43,10 @@ fn main() {
         .init_resource::<EditorPreviewTexture>()
         .init_resource::<DanmakuPreviewTexture>()
         .init_resource::<DanmakuScripts>()
-        .add_systems(Startup, setup::setup)
+        .add_systems(Startup, (
+            setup::setup,
+            input::spawnInitialEditorWindow,
+        ))
         .add_systems(Update, (
             input::handleGlobalInput,
             setup::cameraScalingSystem,

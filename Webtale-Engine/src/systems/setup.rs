@@ -10,8 +10,12 @@ use crate::constants::*;
 pub fn setup(
     mut commands: Commands, 
     assetServer: Res<AssetServer>,
-    _windowQuery: Query<Entity, With<bevy::window::PrimaryWindow>>,
+    mut windowQuery: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
 ) {
+    if let Ok(mut window) = windowQuery.get_single_mut() {
+        window.visible = false;
+    }
+
     commands.spawn((
         Camera2dBundle::default(),
         MainCamera,
@@ -294,7 +298,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section("HP", TextStyle { font: gameFonts.hpLabel.clone(), font_size: 9.0, color: COLOR_UI_TEXT }),
+            text: Text::from_section("HP", TextStyle { font: gameFonts.hpLabel.clone(), font_size: 10.0, color: COLOR_UI_TEXT }),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(225.0, 405.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
@@ -359,16 +363,19 @@ pub fn cameraScalingSystem(
     windowQuery: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut projectionQuery: Query<&mut OrthographicProjection, With<MainCamera>>,
 ) {
-    if let Ok(window) = windowQuery.get_single() {
-        if let Ok(mut projection) = projectionQuery.get_single_mut() {
-            let targetRatio = 640.0 / 480.0;
-            let windowRatio = window.width() / window.height();
+    let Ok(window) = windowQuery.get_single() else { return };
+    if !window.visible {
+        return;
+    }
 
-            if windowRatio > targetRatio {
-                projection.scaling_mode = bevy::render::camera::ScalingMode::FixedVertical(480.0);
-            } else {
-                projection.scaling_mode = bevy::render::camera::ScalingMode::FixedHorizontal(640.0);
-            }
+    if let Ok(mut projection) = projectionQuery.get_single_mut() {
+        let targetRatio = 640.0 / 480.0;
+        let windowRatio = window.width() / window.height();
+
+        if windowRatio > targetRatio {
+            projection.scaling_mode = bevy::render::camera::ScalingMode::FixedVertical(480.0);
+        } else {
+            projection.scaling_mode = bevy::render::camera::ScalingMode::FixedHorizontal(640.0);
         }
     }
 }
