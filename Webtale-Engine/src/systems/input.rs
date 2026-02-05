@@ -5,6 +5,8 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, T
 use bevy::render::view::RenderLayers;
 use bevy::render::camera::RenderTarget;
 use bevy::window::WindowRef;
+use bevy::window::WindowClosed;
+use bevy::window::WindowCloseRequested;
 use bevy_egui::EguiContexts;
 use bevy::sprite::Anchor;
 
@@ -13,10 +15,201 @@ use crate::resources::*;
 use crate::constants::*;
 use crate::systems::setup::spawnGameObjects; 
 
+fn spawnEditorWindow(
+    commands: &mut Commands,
+    assetServer: &AssetServer,
+    images: &mut Assets<Image>,
+    editorPreviewTexture: &mut EditorPreviewTexture,
+    danmakuPreviewTexture: &mut DanmakuPreviewTexture,
+    allEditorEntities: &Query<Entity, With<EditorWindow>>,
+) {
+    for entity in allEditorEntities.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+
+    let editorWindow = commands.spawn((
+        Window {
+            title: "Danmaku Editor".to_string(),
+            resolution: (1280.0, 720.0).into(),
+            resizable: true,
+            prevent_default_event_handling: false, 
+            ..default()
+        },
+        EditorWindow,
+    )).id();
+
+    let size = Extent3d {
+        width: 640,
+        height: 480,
+        ..default()
+    };
+    let mut image = Image {
+        texture_descriptor: bevy::render::render_resource::TextureDescriptor {
+            label: Some("Preview Texture"),
+            size,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Bgra8UnormSrgb,
+            mip_level_count: 1,
+            sample_count: 1,
+            usage: TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_DST
+                | TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        },
+        ..default()
+    };
+    image.resize(size);
+    let imageHandle = images.add(image);
+
+    editorPreviewTexture.0 = imageHandle.clone();
+
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                target: RenderTarget::Image(imageHandle.clone()),
+                order: -1,
+                ..default()
+            },
+            projection: OrthographicProjection {
+                scaling_mode: bevy::render::camera::ScalingMode::FixedVertical(480.0),
+                ..default()
+            },
+            transform: Transform::from_xyz(0.0, 0.0, 999.9), 
+            ..default()
+        },
+        RenderLayers::layer(0),
+        EditorWindow, 
+    ));
+
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                target: RenderTarget::Window(WindowRef::Entity(editorWindow)),
+                clear_color: ClearColorConfig::Custom(Color::hex("222222").unwrap()), 
+                ..default()
+            },
+            transform: Transform::from_xyz(0.0, 0.0, 999.9),
+            ..default()
+        },
+        RenderLayers::layer(1),
+        EditorWindow,
+    ));
+
+    commands.spawn((
+        SpriteBundle {
+            texture: imageHandle,
+            transform: Transform::from_xyz(0.0, 75.0, 0.0), 
+            ..default()
+        },
+        RenderLayers::layer(1),
+        EditorWindow,
+        BattleScreenPreview,
+    ));
+
+    let mut previewImage = Image {
+        texture_descriptor: bevy::render::render_resource::TextureDescriptor {
+            label: Some("Danmaku Preview Texture"),
+            size,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Bgra8UnormSrgb,
+            mip_level_count: 1,
+            sample_count: 1,
+            usage: TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_DST
+                | TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        },
+        ..default()
+    };
+    previewImage.resize(size);
+    let previewImageHandle = images.add(previewImage);
+    danmakuPreviewTexture.0 = previewImageHandle.clone();
+
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                target: RenderTarget::Image(previewImageHandle.clone()),
+                order: -1,
+                clear_color: ClearColorConfig::Custom(Color::BLACK),
+                ..default()
+            },
+            projection: OrthographicProjection {
+                scaling_mode: bevy::render::camera::ScalingMode::FixedVertical(480.0),
+                ..default()
+            },
+            transform: Transform::from_xyz(0.0, 0.0, 999.9), 
+            ..default()
+        },
+        RenderLayers::layer(2),
+        EditorWindow, 
+    ));
+
+    let boxCenter = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
+    
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::WHITE,
+                custom_size: Some(Vec2::new(570.0, 135.0)), 
+                ..default()
+            },
+            transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 0.0)),
+            ..default()
+        },
+        RenderLayers::layer(2),
+        EditorWindow,
+    ));
+    
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::BLACK,
+                custom_size: Some(Vec2::new(560.0, 125.0)), 
+                ..default()
+            },
+            transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 1.0)),
+            ..default()
+        },
+        RenderLayers::layer(2),
+        EditorWindow,
+    ));
+
+    commands.spawn((
+        SpriteBundle {
+            texture: assetServer.load("player/spr_soul_0.png"),
+            transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 2.0)),
+            ..default()
+        },
+        RenderLayers::layer(2),
+        EditorWindow,
+    ));
+}
+
+pub fn spawnInitialEditorWindow(
+    mut commands: Commands,
+    assetServer: Res<AssetServer>,
+    allEditorEntities: Query<Entity, With<EditorWindow>>, 
+    openEditorWindowQuery: Query<Entity, (With<EditorWindow>, With<Window>)>, 
+    mut images: ResMut<Assets<Image>>,
+    mut editorPreviewTexture: ResMut<EditorPreviewTexture>,
+    mut danmakuPreviewTexture: ResMut<DanmakuPreviewTexture>,
+) {
+    if openEditorWindowQuery.is_empty() {
+        spawnEditorWindow(
+            &mut commands,
+            &assetServer,
+            &mut images,
+            &mut editorPreviewTexture,
+            &mut danmakuPreviewTexture,
+            &allEditorEntities,
+        );
+    }
+}
+
 pub fn handleGlobalInput(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
-    mut windowQuery: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+    mut windowQuery: Query<(Entity, &mut Window), With<bevy::window::PrimaryWindow>>,
     mut exitWriter: EventWriter<AppExit>,
     assetServer: Res<AssetServer>,
     gameFonts: Res<GameFonts>,
@@ -27,17 +220,49 @@ pub fn handleGlobalInput(
     mut eguiContexts: EguiContexts,
     mut editorPreviewTexture: ResMut<EditorPreviewTexture>,
     mut danmakuPreviewTexture: ResMut<DanmakuPreviewTexture>,
+    mut windowClosedReader: EventReader<WindowClosed>,
+    mut windowCloseRequestedReader: EventReader<WindowCloseRequested>,
 ) {
+    for closeRequested in windowCloseRequestedReader.read() {
+        if let Ok(editorWindow) = openEditorWindowQuery.get_single() {
+            if closeRequested.window == editorWindow {
+                exitWriter.send(AppExit::default());
+                return;
+            }
+        }
+
+        if let Ok((windowEntity, mut window)) = windowQuery.get_single_mut() {
+            if closeRequested.window == windowEntity {
+                window.visible = false;
+            }
+        }
+    }
+
+    for closed in windowClosedReader.read() {
+        if let Ok(editorWindow) = openEditorWindowQuery.get_single() {
+            if closed.window == editorWindow {
+                exitWriter.send(AppExit::default());
+                return;
+            }
+        }
+    }
+
     if input.just_pressed(KeyCode::Escape) {
         exitWriter.send(AppExit::default());
     }
 
     if (input.pressed(KeyCode::AltLeft) || input.pressed(KeyCode::AltRight)) && input.just_pressed(KeyCode::Enter) {
-        if let Ok(mut window) = windowQuery.get_single_mut() {
-             window.mode = match window.mode {
+        if let Ok((_, mut window)) = windowQuery.get_single_mut() {
+            window.mode = match window.mode {
                 WindowMode::Windowed => WindowMode::BorderlessFullscreen,
                 _ => WindowMode::Windowed,
             };
+        }
+    }
+
+    if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyW) {
+        if let Ok((_, mut window)) = windowQuery.get_single_mut() {
+            window.visible = true;
         }
     }
 
@@ -66,166 +291,14 @@ pub fn handleGlobalInput(
 
     if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyE) {
         if openEditorWindowQuery.is_empty() {
-            for entity in allEditorEntities.iter() {
-                commands.entity(entity).despawn_recursive();
-            }
-
-            let editorWindow = commands.spawn((
-                Window {
-                    title: "Danmaku Editor".to_string(),
-                    resolution: (1280.0, 720.0).into(),
-                    resizable: true,
-                    prevent_default_event_handling: false, 
-                    ..default()
-                },
-                EditorWindow,
-            )).id();
-
-            let size = Extent3d {
-                width: 640,
-                height: 480,
-                ..default()
-            };
-            let mut image = Image {
-                texture_descriptor: bevy::render::render_resource::TextureDescriptor {
-                    label: Some("Preview Texture"),
-                    size,
-                    dimension: TextureDimension::D2,
-                    format: TextureFormat::Bgra8UnormSrgb,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    usage: TextureUsages::TEXTURE_BINDING
-                        | TextureUsages::COPY_DST
-                        | TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[],
-                },
-                ..default()
-            };
-            image.resize(size);
-            let imageHandle = images.add(image);
-
-            editorPreviewTexture.0 = imageHandle.clone();
-
-            commands.spawn((
-                Camera2dBundle {
-                    camera: Camera {
-                        target: RenderTarget::Image(imageHandle.clone()),
-                        order: -1,
-                        ..default()
-                    },
-                    projection: OrthographicProjection {
-                        scaling_mode: bevy::render::camera::ScalingMode::FixedVertical(480.0),
-                        ..default()
-                    },
-                    transform: Transform::from_xyz(0.0, 0.0, 999.9), 
-                    ..default()
-                },
-                RenderLayers::layer(0),
-                EditorWindow, 
-            ));
-
-            commands.spawn((
-                Camera2dBundle {
-                    camera: Camera {
-                        target: RenderTarget::Window(WindowRef::Entity(editorWindow)),
-                        clear_color: ClearColorConfig::Custom(Color::hex("222222").unwrap()), 
-                        ..default()
-                    },
-                    transform: Transform::from_xyz(0.0, 0.0, 999.9),
-                    ..default()
-                },
-                RenderLayers::layer(1),
-                EditorWindow,
-            ));
-
-            commands.spawn((
-                SpriteBundle {
-                    texture: imageHandle,
-                    transform: Transform::from_xyz(0.0, 75.0, 0.0), 
-                    ..default()
-                },
-                RenderLayers::layer(1),
-                EditorWindow,
-                BattleScreenPreview,
-            ));
-
-            let mut previewImage = Image {
-                texture_descriptor: bevy::render::render_resource::TextureDescriptor {
-                    label: Some("Danmaku Preview Texture"),
-                    size,
-                    dimension: TextureDimension::D2,
-                    format: TextureFormat::Bgra8UnormSrgb,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    usage: TextureUsages::TEXTURE_BINDING
-                        | TextureUsages::COPY_DST
-                        | TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[],
-                },
-                ..default()
-            };
-            previewImage.resize(size);
-            let previewImageHandle = images.add(previewImage);
-            danmakuPreviewTexture.0 = previewImageHandle.clone();
-
-            commands.spawn((
-                Camera2dBundle {
-                    camera: Camera {
-                        target: RenderTarget::Image(previewImageHandle.clone()),
-                        order: -1,
-                        clear_color: ClearColorConfig::Custom(Color::BLACK),
-                        ..default()
-                    },
-                    projection: OrthographicProjection {
-                        scaling_mode: bevy::render::camera::ScalingMode::FixedVertical(480.0),
-                        ..default()
-                    },
-                    transform: Transform::from_xyz(0.0, 0.0, 999.9), 
-                    ..default()
-                },
-                RenderLayers::layer(2),
-                EditorWindow, 
-            ));
-
-            let boxCenter = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
-            
-            commands.spawn((
-                SpriteBundle {
-                    sprite: Sprite {
-                        color: Color::WHITE,
-                        custom_size: Some(Vec2::new(570.0, 135.0)), 
-                        ..default()
-                    },
-                    transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 0.0)),
-                    ..default()
-                },
-                RenderLayers::layer(2),
-                EditorWindow,
-            ));
-            
-            commands.spawn((
-                SpriteBundle {
-                    sprite: Sprite {
-                        color: Color::BLACK,
-                        custom_size: Some(Vec2::new(560.0, 125.0)), 
-                        ..default()
-                    },
-                    transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 1.0)),
-                    ..default()
-                },
-                RenderLayers::layer(2),
-                EditorWindow,
-            ));
-
-            commands.spawn((
-                SpriteBundle {
-                    texture: assetServer.load("player/spr_soul_0.png"),
-                    transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 2.0)),
-                    ..default()
-                },
-                RenderLayers::layer(2),
-                EditorWindow,
-            ));
+            spawnEditorWindow(
+                &mut commands,
+                &assetServer,
+                &mut images,
+                &mut editorPreviewTexture,
+                &mut danmakuPreviewTexture,
+                &allEditorEntities,
+            );
         }
     }
 }
