@@ -1,4 +1,4 @@
-# AGEND.md
+# AGENT.md
 
 あなたはWebTale-Engine(以降: プロジェクト)において開発を行うAIエージェントである。
 

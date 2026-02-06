@@ -71,7 +71,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         phaseName: String::new(),
         phaseTurn: 0,
         turnCount: 0,
-        enemyBubbleTexture: "blcon/spr_blconsm.png".to_string(),
+        enemyBubbleTexture: "texture/blcon/spr_blconsm.png".to_string(),
         enemyBubbleMessageOverride: None,
         enemyBubblePosOverride: None,
 
@@ -177,11 +177,11 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
     };
 
     let mut itemDictionary = ItemDictionary::default();
-    let itemPath = format!("projects/{}/properties/item.wep", projectName);
+    let itemPath = format!("projects/{}/properties/item.py", projectName);
 
     if let Ok(script) = fs::read_to_string(&itemPath) {
         Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "item.wep", "item") {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "item.py", "item") {
                 if let Ok(func) = module.getattr("getItemData") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
@@ -211,10 +211,10 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         println!("Warning: Could not load {}", itemPath);
     }
 
-    let playerStatusPath = format!("projects/{}/properties/playerStatus.wep", projectName);
+    let playerStatusPath = format!("projects/{}/properties/playerStatus.py", projectName);
     if let Ok(script) = fs::read_to_string(&playerStatusPath) {
         Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "playerStatus.wep", "playerStatus") {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "playerStatus.py", "playerStatus") {
                 if let Ok(func) = module.getattr("getPlayerStatus") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
@@ -280,10 +280,10 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
     }
 
     let mut phaseScriptName = String::new();
-    let enemyStatusPath = format!("projects/{}/properties/enemyStatus.wep", projectName);
+    let enemyStatusPath = format!("projects/{}/properties/enemyStatus.py", projectName);
     if let Ok(script) = fs::read_to_string(&enemyStatusPath) {
         Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.wep", "enemyStatus") {
+            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.py", "enemyStatus") {
                 if let Ok(func) = module.getattr("getEnemyStatus") {
                     if let Ok(result) = func.call0() {
                         if let Ok(dict) = result.downcast::<PyDict>() {
@@ -448,7 +448,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
 
     commands.spawn((
         SpriteBundle {
-            texture: assetServer.load("heart/spr_heart_0.png"), 
+            texture: assetServer.load("texture/heart/spr_heart_0.png"), 
             sprite: Sprite { color: Color::WHITE, custom_size: Some(Vec2::new(16.0, 16.0)), ..default() },
             transform: Transform::from_translation(gml_to_bevy(0.0, 0.0) + Vec3::new(0.0, 0.0, Z_SOUL)),
             ..default()
@@ -458,10 +458,10 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
     ));
 
     let buttons = [
-        (BTN_FIGHT_X, "button/spr_fightbt_0.png", "button/spr_fightbt_1.png", 0),
-        (BTN_ACT_X,   "button/spr_actbt_center_0.png", "button/spr_actbt_center_1.png", 1),
-        (BTN_ITEM_X,  "button/spr_itembt_0.png",  "button/spr_itembt_1.png",  2),
-        (BTN_MERCY_X, "button/spr_sparebt_0.png", "button/spr_sparebt_1.png", 3),
+        (BTN_FIGHT_X, "texture/button/spr_fightbt_0.png", "texture/button/spr_fightbt_1.png", 0),
+        (BTN_ACT_X,   "texture/button/spr_actbt_center_0.png", "texture/button/spr_actbt_center_1.png", 1),
+        (BTN_ITEM_X,  "texture/button/spr_itembt_0.png",  "texture/button/spr_itembt_1.png",  2),
+        (BTN_MERCY_X, "texture/button/spr_sparebt_0.png", "texture/button/spr_sparebt_1.png", 3),
     ];
 
     for (x, normalPath, selectedPath, idx) in buttons {

@@ -18,7 +18,7 @@ pub fn heartDefeatedUpdate(
                     defeated.state = HeartDefeatedState::Cracked;
                     defeated.timer = Timer::from_seconds(1.0, TimerMode::Once); 
                     
-                    *texture = assetServer.load("heart/spr_heartbreak.png");
+                    *texture = assetServer.load("texture/heart/spr_heartbreak.png");
                     transform.translation.x -= 2.0; 
                 }
             },
@@ -44,7 +44,7 @@ pub fn heartDefeatedUpdate(
                         let vy = speed * directionRad.sin(); 
 
                         let shardIndex = rng.gen_range(0..4);
-                        let texturePath = format!("heart/spr_heartshards_{}.png", shardIndex);
+                        let texturePath = format!("texture/heart/spr_heartshards_{}.png", shardIndex);
 
                         commands.spawn((
                             SpriteBundle {
@@ -93,7 +93,7 @@ pub fn gameOverSequenceUpdate(
 
                     commands.spawn((
                         SpriteBundle {
-                            texture: assetServer.load("background/spr_gameoverbg.png"),
+                            texture: assetServer.load("texture/background/spr_gameoverbg.png"),
                             sprite: Sprite {
                                 color: Color::rgba(1.0, 1.0, 1.0, 0.0),
                                 ..default()

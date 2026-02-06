@@ -408,7 +408,7 @@ pub fn menuInputSystem(
                 let boxCenter = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
                 commands.spawn((
                     SpriteBundle {
-                        texture: assetServer.load("attack/spr_target.png"),
+                        texture: assetServer.load("texture/attack/spr_target.png"),
                         sprite: Sprite { custom_size: Some(Vec2::new(566.0, 120.0)), ..default() },
                         transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, Z_ATTACK_TARGET)),
                         ..default()
@@ -419,7 +419,7 @@ pub fn menuInputSystem(
                 let barStartX = gml_to_bevy(32.0, 0.0).x;
                 commands.spawn((
                     SpriteBundle {
-                        texture: assetServer.load("attack/spr_targetchoice_1.png"),
+                        texture: assetServer.load("texture/attack/spr_targetchoice_1.png"),
                         sprite: Sprite { custom_size: Some(Vec2::new(14.0, 120.0)), ..default() },
                         transform: Transform::from_translation(Vec3::new(barStartX, boxCenter.y, Z_ATTACK_BAR)),
                         ..default()

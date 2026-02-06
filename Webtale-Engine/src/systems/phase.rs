@@ -8,14 +8,14 @@ use crate::resources::GameState;
 pub fn resolveInitialPhase(projectName: &str, requested: &str) -> String {
     let relativePath = format!("projects/{}/phases", projectName);
     if !requested.is_empty() {
-        let requestedPath = format!("{}/{}.wep", relativePath, requested);
+        let requestedPath = format!("{}/{}.py", relativePath, requested);
         if fs::metadata(&requestedPath).is_ok() {
             return requested.to_string();
         }
         println!("Warning: phase script missing {}", requestedPath);
     }
 
-    let phase1Path = format!("{}/phase1.wep", relativePath);
+    let phase1Path = format!("{}/phase1.py", relativePath);
     if fs::metadata(&phase1Path).is_ok() {
         return "phase1".to_string();
     }
@@ -45,19 +45,19 @@ pub fn resolveInitialPhase(projectName: &str, requested: &str) -> String {
 
 fn resolveBubbleTextureName(name: &str) -> String {
     match name {
-        "blconabove" => "blcon/spr_blconabove.png",
-        "blconbelow" => "blcon/spr_blconbelow.png",
-        "blconsm" => "blcon/spr_blconsm.png",
-        "blconsm2" => "blcon/spr_blconsm2.png",
-        "blconsm2_shrt" => "blcon/spr_blconsm2_shrt.png",
-        "blconsm_plus1" => "blcon/spr_blconsm_plus1.png",
-        "blconsm_shrt" => "blcon/spr_blconsm_shrt.png",
-        "blcontiny" => "blcon/spr_blcontiny.png",
-        "blcontinyabove" => "blcon/spr_blcontinyabove.png",
-        "blcontl" => "blcon/spr_blcontl.png",
-        "blconwd" => "blcon/spr_blconwd.png",
-        "blconwdshrt" => "blcon/spr_blconwdshrt.png",
-        "blconwdshrt_l" => "blcon/spr_blconwdshrt_l.png",
+        "blconabove" => "texture/blcon/spr_blconabove.png",
+        "blconbelow" => "texture/blcon/spr_blconbelow.png",
+        "blconsm" => "texture/blcon/spr_blconsm.png",
+        "blconsm2" => "texture/blcon/spr_blconsm2.png",
+        "blconsm2_shrt" => "texture/blcon/spr_blconsm2_shrt.png",
+        "blconsm_plus1" => "texture/blcon/spr_blconsm_plus1.png",
+        "blconsm_shrt" => "texture/blcon/spr_blconsm_shrt.png",
+        "blcontiny" => "texture/blcon/spr_blcontiny.png",
+        "blcontinyabove" => "texture/blcon/spr_blcontinyabove.png",
+        "blcontl" => "texture/blcon/spr_blcontl.png",
+        "blconwd" => "texture/blcon/spr_blconwd.png",
+        "blconwdshrt" => "texture/blcon/spr_blconwdshrt.png",
+        "blconwdshrt_l" => "texture/blcon/spr_blconwdshrt_l.png",
         _ => name,
     }
     .to_string()
@@ -70,8 +70,8 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
 
     let phaseName = gameState.phaseName.clone();
     let relativePath = format!("projects/{}/phases", projectName);
-    let scriptPath = format!("{}/{}.wep", relativePath, phaseName);
-    let apiPath = format!("{}/phase_api.wep", relativePath);
+    let scriptPath = format!("{}/{}.py", relativePath, phaseName);
+    let apiPath = format!("{}/phase_api.py", relativePath);
 
     let scriptContent = match fs::read_to_string(&scriptPath) {
         Ok(content) => content,
@@ -112,7 +112,7 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         }
 
-        let apiModule = match PyModule::from_code_bound(py, &apiContent, "phase_api.wep", "phase_api") {
+        let apiModule = match PyModule::from_code_bound(py, &apiContent, "phase_api.py", "phase_api") {
             Ok(module) => module,
             Err(err) => {
                 err.print(py);
@@ -159,7 +159,7 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         }
 
-        let phaseModule = match PyModule::from_code_bound(py, &scriptContent, &format!("{}.wep", phaseName), &phaseName) {
+        let phaseModule = match PyModule::from_code_bound(py, &scriptContent, &format!("{}.py", phaseName), &phaseName) {
             Ok(module) => module,
             Err(err) => {
                 err.print(py);

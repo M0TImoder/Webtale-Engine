@@ -31,7 +31,7 @@ pub fn attackBarUpdate(
             
             if bar.flashState {
                  bar.flashState = false;
-                 *texture = assetServer.load("attack/spr_targetchoice_0.png");
+                 *texture = assetServer.load("texture/attack/spr_targetchoice_0.png");
             }
 
             let boxCenterX = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 0.0).x;
@@ -43,7 +43,7 @@ pub fn attackBarUpdate(
                     commands.entity(barEntity).despawn();
                 } else {
                     bar.moving = false;
-                    *texture = assetServer.load("attack/spr_targetchoice_1.png");
+                    *texture = assetServer.load("texture/attack/spr_targetchoice_1.png");
                     bar.flashState = true; 
                 }
                 
@@ -67,7 +67,7 @@ pub fn attackBarUpdate(
                 let waitTime = if damage > 0 {
                     commands.spawn((
                         SpriteBundle {
-                            texture: assetServer.load("attack/spr_strike_0.png"),
+                            texture: assetServer.load("texture/attack/spr_strike_0.png"),
                             transform: Transform {
                                 translation: enemyPos + Vec3::new(0.0, 0.0, Z_SLICE),
                                 scale: Vec3::splat(2.0),
@@ -94,7 +94,7 @@ pub fn attackBarUpdate(
         } else {
             if bar.flashTimer.tick(time.delta()).just_finished() {
                 bar.flashState = !bar.flashState;
-                let path = if bar.flashState { "attack/spr_targetchoice_1.png" } else { "attack/spr_targetchoice_0.png" };
+                let path = if bar.flashState { "texture/attack/spr_targetchoice_1.png" } else { "texture/attack/spr_targetchoice_0.png" };
                 *texture = assetServer.load(path);
             }
         }
@@ -154,7 +154,7 @@ pub fn applyPendingDamage(
 
                     for (i, char) in dmgStr.chars().enumerate() {
                         let charX = startXOffset + (i as f32 * charSpacing);
-                        let texturePath = format!("dmgnum/spr_dmgnum_o_{}.png", char);
+                        let texturePath = format!("texture/dmgnum/spr_dmgnum_o_{}.png", char);
 
                         parent.spawn(SpriteBundle {
                             texture: assetServer.load(texturePath),
@@ -169,7 +169,7 @@ pub fn applyPendingDamage(
                     }
                 } else {
                     parent.spawn(SpriteBundle {
-                        texture: assetServer.load("dmgnum/spr_dmgmiss_o.png"),
+                        texture: assetServer.load("texture/dmgnum/spr_dmgmiss_o.png"),
                         sprite: Sprite {
                             color: Color::rgb(0.8, 0.8, 0.8), 
                             custom_size: None,
@@ -238,7 +238,7 @@ pub fn animateSliceEffect(
             if effect.frameIndex > 5 {
                 commands.entity(entity).despawn();
             } else {
-                let path = format!("attack/spr_strike_{}.png", effect.frameIndex);
+                let path = format!("texture/attack/spr_strike_{}.png", effect.frameIndex);
                 *texture = assetServer.load(path);
             }
         }

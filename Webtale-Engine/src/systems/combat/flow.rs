@@ -46,7 +46,7 @@ pub fn battleFlowControl(
             let bubbleX = bubblePos.x; 
             let bubbleY = bubblePos.y; 
             let bubbleTexture = if gameState.enemyBubbleTexture.is_empty() {
-                "blcon/spr_blconsm.png".to_string()
+                "texture/blcon/spr_blconsm.png".to_string()
             } else {
                 gameState.enemyBubbleTexture.clone()
             };
@@ -135,7 +135,7 @@ pub fn combatTurnManager(
             };
             
             let relativePath = format!("projects/{}/danmaku", PROJECT_NAME);
-            let scriptFilePath = format!("{}/{}.wep", relativePath, scriptName);
+            let scriptFilePath = format!("{}/{}.py", relativePath, scriptName);
 
             let scriptContent = match std::fs::read_to_string(&scriptFilePath) {
                 Ok(content) => content,
@@ -152,7 +152,7 @@ pub fn combatTurnManager(
                 let envPath = std::env::current_dir().unwrap().join(&relativePath);
                 let _ = path.call_method1("append", (envPath.to_str().unwrap(),));
 
-                let apiPath = format!("{}/api.wep", relativePath);
+                let apiPath = format!("{}/api.py", relativePath);
                 let apiContent = match std::fs::read_to_string(&apiPath) {
                     Ok(content) => content,
                     Err(err) => {
@@ -165,7 +165,7 @@ pub fn combatTurnManager(
                     return;
                 }
 
-                let apiModule = match PyModule::from_code_bound(py, &apiContent, "api.wep", "api") {
+                let apiModule = match PyModule::from_code_bound(py, &apiContent, "api.py", "api") {
                     Ok(module) => module,
                     Err(err) => {
                         err.print(py);
@@ -189,7 +189,7 @@ pub fn combatTurnManager(
                     return;
                 }
 
-                let module = match PyModule::from_code_bound(py, &scriptContent, &format!("{}.wep", scriptName), &scriptName) {
+                let module = match PyModule::from_code_bound(py, &scriptContent, &format!("{}.py", scriptName), &scriptName) {
                     Ok(module) => module,
                     Err(err) => {
                         err.print(py);

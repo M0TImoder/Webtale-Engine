@@ -99,7 +99,7 @@ pub fn soulCollisionDetection(
 
                     commands.spawn((
                         SpriteBundle {
-                            texture: assetServer.load("heart/spr_heart_0.png"), 
+                            texture: assetServer.load("texture/heart/spr_heart_0.png"), 
                             sprite: Sprite { 
                                 color: Color::WHITE, 
                                 custom_size: Some(Vec2::new(16.0, 16.0)), 
