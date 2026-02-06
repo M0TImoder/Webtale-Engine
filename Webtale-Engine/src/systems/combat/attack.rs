@@ -107,6 +107,7 @@ pub fn applyPendingDamage(
     mut gameState: ResMut<GameState>,
     assetServer: Res<AssetServer>,
     _gameFonts: Res<GameFonts>,
+    python_runtime: NonSend<PythonRuntime>,
     mut query: Query<(Entity, &mut PendingDamage)>,
 ) {
     for (entity, mut pending) in query.iter_mut() {
@@ -121,7 +122,7 @@ pub fn applyPendingDamage(
             } else {
                 "attackMiss".to_string()
             };
-            if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "damage") {
+            if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "damage", &python_runtime) {
                 if nextPhase != gameState.phaseName {
                     gameState.phaseName = nextPhase;
                     gameState.phaseTurn = 0;

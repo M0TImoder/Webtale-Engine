@@ -1,17 +1,19 @@
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use rustpython_vm::builtins::PyDictRef;
+use rustpython_vm::compiler::Mode;
+use rustpython_vm::scope::Scope;
 use std::collections::HashMap;
-use std::fs;
 use crate::components::*;
-use crate::resources::*;
 use crate::constants::*;
+use crate::python_scripts;
+use crate::resources::*;
 use crate::systems::phase;
 
 pub fn setup(
     mut commands: Commands, 
     assetServer: Res<AssetServer>,
+    python_runtime: NonSend<PythonRuntime>,
     mut windowQuery: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
 ) {
     if let Ok(mut window) = windowQuery.get_single_mut() {
@@ -35,12 +37,12 @@ pub fn setup(
         damage: fontDamage.clone(), 
     };
 
-    spawnGameObjects(&mut commands, &assetServer, &gameFonts);
+    spawnGameObjects(&mut commands, &assetServer, &gameFonts, &python_runtime);
 
     commands.insert_resource(gameFonts);
 }
 
-pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, gameFonts: &GameFonts) {
+pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, gameFonts: &GameFonts, python_runtime: &PythonRuntime) {
     let mut gameState = GameState {
         hp: 0.0,
         maxHp: 0.0,
@@ -95,167 +97,349 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
     };
 
     let projectName = PROJECT_NAME;
-
-    let readString = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<String> {
-        match dict.get_item(key) {
-            Ok(Some(value)) => match value.extract::<String>() {
-                Ok(result) => Some(result),
-                Err(err) => {
-                    println!("Warning: {} {} {}", label, key, err);
-                    None
-                }
-            },
-            Ok(None) => {
-                println!("Warning: {} missing {}", label, key);
-                None
-            }
-            Err(err) => {
-                println!("Warning: {} {} {}", label, key, err);
-                None
-            }
-        }
-    };
-
-    let readF32 = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<f32> {
-        match dict.get_item(key) {
-            Ok(Some(value)) => match value.extract::<f32>() {
-                Ok(result) => Some(result),
-                Err(err) => {
-                    println!("Warning: {} {} {}", label, key, err);
-                    None
-                }
-            },
-            Ok(None) => {
-                println!("Warning: {} missing {}", label, key);
-                None
-            }
-            Err(err) => {
-                println!("Warning: {} {} {}", label, key, err);
-                None
-            }
-        }
-    };
-
-    let readI32 = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<i32> {
-        match dict.get_item(key) {
-            Ok(Some(value)) => match value.extract::<i32>() {
-                Ok(result) => Some(result),
-                Err(err) => {
-                    println!("Warning: {} {} {}", label, key, err);
-                    None
-                }
-            },
-            Ok(None) => {
-                println!("Warning: {} missing {}", label, key);
-                None
-            }
-            Err(err) => {
-                println!("Warning: {} {} {}", label, key, err);
-                None
-            }
-        }
-    };
-
-    let readVecString = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<Vec<String>> {
-        match dict.get_item(key) {
-            Ok(Some(value)) => match value.extract::<Vec<String>>() {
-                Ok(result) => Some(result),
-                Err(err) => {
-                    println!("Warning: {} {} {}", label, key, err);
-                    None
-                }
-            },
-            Ok(None) => {
-                println!("Warning: {} missing {}", label, key);
-                None
-            }
-            Err(err) => {
-                println!("Warning: {} {} {}", label, key, err);
-                None
-            }
-        }
-    };
-
     let mut itemDictionary = ItemDictionary::default();
-    let itemPath = format!("projects/{}/properties/item.py", projectName);
+    let mut phaseScriptName = String::new();
 
-    if let Ok(script) = fs::read_to_string(&itemPath) {
-        Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "item.py", "item") {
-                if let Ok(func) = module.getattr("getItemData") {
-                    if let Ok(result) = func.call0() {
-                        if let Ok(dict) = result.downcast::<PyDict>() {
-                            for (key, value) in dict.iter() {
-                                let itemName: String = match key.extract() {
-                                    Ok(name) => name,
-                                    Err(err) => {
-                                        println!("Warning: itemData key {}", err);
-                                        continue;
-                                    }
-                                };
-                                if let Ok(data) = value.downcast::<PyDict>() {
-                                    let heal = readI32(data, "heal", "itemData").unwrap_or(0);
-                                    let attack = readI32(data, "attack", "itemData").unwrap_or(0);
-                                    let defense = readI32(data, "defense", "itemData").unwrap_or(0);
-                                    let text = readString(data, "text", "itemData").unwrap_or_default();
-                                    
+    python_runtime.interpreter.enter(|vm| {
+        let run_script = |code: &str, filename: &str| -> Option<Scope> {
+            let scope = vm.new_scope_with_builtins();
+            let code_obj = match vm.compile(code, Mode::Exec, filename.to_string()) {
+                Ok(code_obj) => code_obj,
+                Err(err) => {
+                    println!("Warning: python compile {} {:?}", filename, err);
+                    return None;
+                }
+            };
+            if let Err(err) = vm.run_code_obj(code_obj, scope.clone()) {
+                vm.print_exception(err.clone());
+                return None;
+            }
+            Some(scope)
+        };
+
+        let readString = |dict: &PyDictRef, key: &str, label: &str| -> Option<String> {
+            match dict.get_item_opt(key, vm) {
+                Ok(Some(value)) => match value.try_into_value(vm) {
+                    Ok(result) => Some(result),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: {} {} {:?}", label, key, err);
+                        None
+                    }
+                },
+                Ok(None) => {
+                    println!("Warning: {} missing {}", label, key);
+                    None
+                }
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    println!("Warning: {} {} {:?}", label, key, err);
+                    None
+                }
+            }
+        };
+
+        let readF32 = |dict: &PyDictRef, key: &str, label: &str| -> Option<f32> {
+            match dict.get_item_opt(key, vm) {
+                Ok(Some(value)) => match value.try_into_value(vm) {
+                    Ok(result) => Some(result),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: {} {} {:?}", label, key, err);
+                        None
+                    }
+                },
+                Ok(None) => {
+                    println!("Warning: {} missing {}", label, key);
+                    None
+                }
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    println!("Warning: {} {} {:?}", label, key, err);
+                    None
+                }
+            }
+        };
+
+        let readI32 = |dict: &PyDictRef, key: &str, label: &str| -> Option<i32> {
+            match dict.get_item_opt(key, vm) {
+                Ok(Some(value)) => match value.try_into_value(vm) {
+                    Ok(result) => Some(result),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: {} {} {:?}", label, key, err);
+                        None
+                    }
+                },
+                Ok(None) => {
+                    println!("Warning: {} missing {}", label, key);
+                    None
+                }
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    println!("Warning: {} {} {:?}", label, key, err);
+                    None
+                }
+            }
+        };
+
+        let readVecString = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<String>> {
+            match dict.get_item_opt(key, vm) {
+                Ok(Some(value)) => match value.try_into_value(vm) {
+                    Ok(result) => Some(result),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: {} {} {:?}", label, key, err);
+                        None
+                    }
+                },
+                Ok(None) => {
+                    println!("Warning: {} missing {}", label, key);
+                    None
+                }
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    println!("Warning: {} {} {:?}", label, key, err);
+                    None
+                }
+            }
+        };
+
+        let itemScript = match python_scripts::get_item_script(projectName) {
+            Some(script) => script,
+            None => {
+                println!("Warning: Could not load projects/{}/properties/item.py", projectName);
+                ""
+            }
+        };
+        if !itemScript.is_empty() {
+            if let Some(scope) = run_script(itemScript, "item.py") {
+                match scope.globals.get_item_opt("getItemData", vm) {
+                    Ok(Some(func)) => match vm.invoke(&func, ()) {
+                        Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
+                            Ok(dict) => {
+                                for (key, value) in &dict {
+                                    let itemName: String = match key.try_into_value(vm) {
+                                        Ok(name) => name,
+                                        Err(err) => {
+                                            vm.print_exception(err.clone());
+                                            println!("Warning: itemData key {:?}", err);
+                                            continue;
+                                        }
+                                    };
+                                    let data: PyDictRef = match value.try_into_value(vm) {
+                                        Ok(data) => data,
+                                        Err(err) => {
+                                            vm.print_exception(err.clone());
+                                            println!("Warning: itemData value {:?}", err);
+                                            continue;
+                                        }
+                                    };
+                                    let heal = readI32(&data, "heal", "itemData").unwrap_or(0);
+                                    let attack = readI32(&data, "attack", "itemData").unwrap_or(0);
+                                    let defense = readI32(&data, "defense", "itemData").unwrap_or(0);
+                                    let text = readString(&data, "text", "itemData").unwrap_or_default();
+
                                     itemDictionary.0.insert(itemName, ItemInfo { healAmount: heal, attack, defense, text });
                                 }
                             }
+                            Err(err) => {
+                                vm.print_exception(err.clone());
+                                println!("Warning: itemData result {:?}", err);
+                            }
+                        },
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: itemData call {:?}", err);
                         }
+                    },
+                    Ok(None) => println!("Warning: itemData missing getItemData"),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: itemData lookup {:?}", err);
                     }
                 }
             }
-        });
-    } else {
-        println!("Warning: Could not load {}", itemPath);
-    }
+        }
 
-    let playerStatusPath = format!("projects/{}/properties/playerStatus.py", projectName);
-    if let Ok(script) = fs::read_to_string(&playerStatusPath) {
-        Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "playerStatus.py", "playerStatus") {
-                if let Ok(func) = module.getattr("getPlayerStatus") {
-                    if let Ok(result) = func.call0() {
-                        if let Ok(dict) = result.downcast::<PyDict>() {
-                            if let Some(name) = readString(dict, "name", "playerStatus") {
-                                gameState.name = name;
+        let playerStatusScript = match python_scripts::get_player_status_script(projectName) {
+            Some(script) => script,
+            None => {
+                println!("Warning: Could not load projects/{}/properties/playerStatus.py", projectName);
+                ""
+            }
+        };
+        if !playerStatusScript.is_empty() {
+            if let Some(scope) = run_script(playerStatusScript, "playerStatus.py") {
+                match scope.globals.get_item_opt("getPlayerStatus", vm) {
+                    Ok(Some(func)) => match vm.invoke(&func, ()) {
+                        Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
+                            Ok(dict) => {
+                                if let Some(name) = readString(&dict, "name", "playerStatus") {
+                                    gameState.name = name;
+                                }
+                                if let Some(lv) = readI32(&dict, "lv", "playerStatus") {
+                                    gameState.lv = lv;
+                                }
+                                if let Some(maxHp) = readF32(&dict, "maxHp", "playerStatus") {
+                                    gameState.maxHp = maxHp;
+                                }
+                                if let Some(hp) = readF32(&dict, "hp", "playerStatus") {
+                                    gameState.hp = hp;
+                                }
+                                if let Some(speed) = readF32(&dict, "speed", "playerStatus") {
+                                    gameState.speed = speed;
+                                }
+                                if let Some(attack) = readF32(&dict, "attack", "playerStatus") {
+                                    gameState.attack = attack;
+                                }
+                                if let Some(defense) = readF32(&dict, "defense", "playerStatus") {
+                                    gameState.defense = defense;
+                                }
+                                if let Some(invDur) = readF32(&dict, "invincibilityDuration", "playerStatus") {
+                                    gameState.invincibilityDuration = invDur;
+                                }
+                                if let Some(inventory) = readVecString(&dict, "inventory", "playerStatus") {
+                                    gameState.inventory = inventory;
+                                }
+                                if let Some(equippedItems) = readVecString(&dict, "equippedItems", "playerStatus") {
+                                    gameState.equippedItems = equippedItems;
+                                }
                             }
-                            if let Some(lv) = readI32(dict, "lv", "playerStatus") {
-                                gameState.lv = lv;
+                            Err(err) => {
+                                vm.print_exception(err.clone());
+                                println!("Warning: playerStatus result {:?}", err);
                             }
-                            if let Some(maxHp) = readF32(dict, "maxHp", "playerStatus") {
-                                gameState.maxHp = maxHp;
-                            }
-                            if let Some(hp) = readF32(dict, "hp", "playerStatus") {
-                                gameState.hp = hp;
-                            }
-                            if let Some(speed) = readF32(dict, "speed", "playerStatus") {
-                                gameState.speed = speed;
-                            }
-                            if let Some(attack) = readF32(dict, "attack", "playerStatus") {
-                                gameState.attack = attack;
-                            }
-                            if let Some(defense) = readF32(dict, "defense", "playerStatus") {
-                                gameState.defense = defense;
-                            }
-                            if let Some(invDur) = readF32(dict, "invincibilityDuration", "playerStatus") {
-                                gameState.invincibilityDuration = invDur;
-                            }
-                            if let Some(inventory) = readVecString(dict, "inventory", "playerStatus") {
-                                gameState.inventory = inventory;
-                            }
-                            if let Some(equippedItems) = readVecString(dict, "equippedItems", "playerStatus") {
-                                gameState.equippedItems = equippedItems;
-                            }
+                        },
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: playerStatus call {:?}", err);
                         }
+                    },
+                    Ok(None) => println!("Warning: playerStatus missing getPlayerStatus"),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: playerStatus lookup {:?}", err);
                     }
                 }
             }
-        });
-    } else {
-        println!("Warning: Could not load {}", playerStatusPath);
-    }
+        }
+
+        let enemyStatusScript = match python_scripts::get_enemy_status_script(projectName) {
+            Some(script) => script,
+            None => {
+                println!("Warning: Could not load projects/{}/properties/enemyStatus.py", projectName);
+                ""
+            }
+        };
+        if !enemyStatusScript.is_empty() {
+            if let Some(scope) = run_script(enemyStatusScript, "enemyStatus.py") {
+                match scope.globals.get_item_opt("getEnemyStatus", vm) {
+                    Ok(Some(func)) => match vm.invoke(&func, ()) {
+                        Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
+                            Ok(dict) => {
+                                if let Some(hp) = readI32(&dict, "enemyHp", "enemyStatus") {
+                                    gameState.enemyHp = hp;
+                                }
+                                if let Some(maxHp) = readI32(&dict, "enemyMaxHp", "enemyStatus") {
+                                    gameState.enemyMaxHp = maxHp;
+                                }
+                                if let Some(atk) = readI32(&dict, "enemyAtk", "enemyStatus") {
+                                    gameState.enemyAtk = atk;
+                                }
+                                if let Some(def) = readI32(&dict, "enemyDef", "enemyStatus") {
+                                    gameState.enemyDef = def;
+                                }
+                                if let Some(name) = readString(&dict, "enemyName", "enemyStatus") {
+                                    gameState.enemyName = name;
+                                }
+                                if let Some(dialogText) = readString(&dict, "dialogText", "enemyStatus") {
+                                    gameState.enemyDialogText = dialogText;
+                                }
+                                if let Some(phaseScript) = readString(&dict, "phaseScript", "enemyStatus") {
+                                    phaseScriptName = phaseScript;
+                                }
+                                if let Some(attacks) = readVecString(&dict, "attackPatterns", "enemyStatus") {
+                                    gameState.enemyAttacks = attacks;
+                                }
+                                if let Some(commands) = readVecString(&dict, "actCommands", "enemyStatus") {
+                                    gameState.enemyActCommands = commands;
+                                }
+                                match dict.get_item_opt("actTexts", vm) {
+                                    Ok(Some(actTextsObj)) => match actTextsObj.try_into_value::<PyDictRef>(vm) {
+                                        Ok(actTexts) => {
+                                            for (key, value) in &actTexts {
+                                                let command: String = match key.try_into_value(vm) {
+                                                    Ok(name) => name,
+                                                    Err(err) => {
+                                                        vm.print_exception(err.clone());
+                                                        println!("Warning: enemyStatus actTexts key {:?}", err);
+                                                        continue;
+                                                    }
+                                                };
+                                                let text: String = match value.try_into_value(vm) {
+                                                    Ok(result) => result,
+                                                    Err(err) => {
+                                                        vm.print_exception(err.clone());
+                                                        println!("Warning: enemyStatus actTexts value {:?}", err);
+                                                        continue;
+                                                    }
+                                                };
+                                                gameState.enemyActTexts.insert(command, text);
+                                            }
+                                        }
+                                        Err(err) => {
+                                            vm.print_exception(err.clone());
+                                            println!("Warning: enemyStatus actTexts {:?}", err);
+                                        }
+                                    },
+                                    Ok(None) => println!("Warning: enemyStatus missing actTexts"),
+                                    Err(err) => {
+                                        vm.print_exception(err.clone());
+                                        println!("Warning: enemyStatus actTexts {:?}", err);
+                                    }
+                                }
+                                if let Some(messages) = readVecString(&dict, "bubbleMessages", "enemyStatus") {
+                                    gameState.enemyBubbleMessages = messages;
+                                }
+                                if let Some(bodyTexture) = readString(&dict, "bodyTexture", "enemyStatus") {
+                                    gameState.enemyBodyTexture = bodyTexture;
+                                }
+                                if let Some(headTexture) = readString(&dict, "headTexture", "enemyStatus") {
+                                    gameState.enemyHeadTexture = headTexture;
+                                }
+                                if let Some(headYOffset) = readF32(&dict, "headYOffset", "enemyStatus") {
+                                    gameState.enemyHeadYOffset = headYOffset;
+                                }
+                                if let Some(baseX) = readF32(&dict, "baseX", "enemyStatus") {
+                                    gameState.enemyBaseX = baseX;
+                                }
+                                if let Some(baseY) = readF32(&dict, "baseY", "enemyStatus") {
+                                    gameState.enemyBaseY = baseY;
+                                }
+                                if let Some(scale) = readF32(&dict, "scale", "enemyStatus") {
+                                    gameState.enemyScale = scale;
+                                }
+                            }
+                            Err(err) => {
+                                vm.print_exception(err.clone());
+                                println!("Warning: enemyStatus result {:?}", err);
+                            }
+                        },
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: enemyStatus call {:?}", err);
+                        }
+                    },
+                    Ok(None) => println!("Warning: enemyStatus missing getEnemyStatus"),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: enemyStatus lookup {:?}", err);
+                    }
+                }
+            }
+        }
+    });
 
     if gameState.name.is_empty() {
         println!("Warning: playerStatus missing name");
@@ -279,96 +463,6 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         println!("Warning: playerStatus invincibilityDuration invalid");
     }
 
-    let mut phaseScriptName = String::new();
-    let enemyStatusPath = format!("projects/{}/properties/enemyStatus.py", projectName);
-    if let Ok(script) = fs::read_to_string(&enemyStatusPath) {
-        Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.py", "enemyStatus") {
-                if let Ok(func) = module.getattr("getEnemyStatus") {
-                    if let Ok(result) = func.call0() {
-                        if let Ok(dict) = result.downcast::<PyDict>() {
-                            if let Some(hp) = readI32(dict, "enemyHp", "enemyStatus") {
-                                gameState.enemyHp = hp;
-                            }
-                            if let Some(maxHp) = readI32(dict, "enemyMaxHp", "enemyStatus") {
-                                gameState.enemyMaxHp = maxHp;
-                            }
-                            if let Some(atk) = readI32(dict, "enemyAtk", "enemyStatus") {
-                                gameState.enemyAtk = atk;
-                            }
-                            if let Some(def) = readI32(dict, "enemyDef", "enemyStatus") {
-                                gameState.enemyDef = def;
-                            }
-                            if let Some(name) = readString(dict, "enemyName", "enemyStatus") {
-                                gameState.enemyName = name;
-                            }
-                            if let Some(dialogText) = readString(dict, "dialogText", "enemyStatus") {
-                                gameState.enemyDialogText = dialogText;
-                            }
-                            if let Some(phaseScript) = readString(dict, "phaseScript", "enemyStatus") {
-                                phaseScriptName = phaseScript;
-                            }
-                            if let Some(attacks) = readVecString(dict, "attackPatterns", "enemyStatus") {
-                                gameState.enemyAttacks = attacks;
-                            }
-                            if let Some(commands) = readVecString(dict, "actCommands", "enemyStatus") {
-                                gameState.enemyActCommands = commands;
-                            }
-                            if let Ok(Some(actTextsObj)) = dict.get_item("actTexts") {
-                                if let Ok(actTexts) = actTextsObj.downcast::<PyDict>() {
-                                    for (key, value) in actTexts.iter() {
-                                        let command: String = match key.extract() {
-                                            Ok(name) => name,
-                                            Err(err) => {
-                                                println!("Warning: enemyStatus actTexts key {}", err);
-                                                continue;
-                                            }
-                                        };
-                                        let text: String = match value.extract() {
-                                            Ok(result) => result,
-                                            Err(err) => {
-                                                println!("Warning: enemyStatus actTexts value {}", err);
-                                                continue;
-                                            }
-                                        };
-                                        gameState.enemyActTexts.insert(command, text);
-                                    }
-                                } else {
-                                    println!("Warning: enemyStatus actTexts not dict");
-                                }
-                            } else {
-                                println!("Warning: enemyStatus missing actTexts");
-                            }
-                            if let Some(messages) = readVecString(dict, "bubbleMessages", "enemyStatus") {
-                                gameState.enemyBubbleMessages = messages;
-                            }
-                            if let Some(bodyTexture) = readString(dict, "bodyTexture", "enemyStatus") {
-                                gameState.enemyBodyTexture = bodyTexture;
-                            }
-                            if let Some(headTexture) = readString(dict, "headTexture", "enemyStatus") {
-                                gameState.enemyHeadTexture = headTexture;
-                            }
-                            if let Some(headYOffset) = readF32(dict, "headYOffset", "enemyStatus") {
-                                gameState.enemyHeadYOffset = headYOffset;
-                            }
-                            if let Some(baseX) = readF32(dict, "baseX", "enemyStatus") {
-                                gameState.enemyBaseX = baseX;
-                            }
-                            if let Some(baseY) = readF32(dict, "baseY", "enemyStatus") {
-                                gameState.enemyBaseY = baseY;
-                            }
-                            if let Some(scale) = readF32(dict, "scale", "enemyStatus") {
-                                gameState.enemyScale = scale;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    } else {
-        println!("Warning: Could not load {}", enemyStatusPath);
-    }
-
     if gameState.enemyMaxHp <= 0 {
         println!("Warning: enemyMaxHp invalid");
         gameState.enemyMaxHp = 1;
@@ -388,11 +482,11 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
 
     gameState.phaseName = phase::resolveInitialPhase(projectName, &phaseScriptName);
     if !gameState.phaseName.is_empty() {
-        if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, projectName, "start") {
+        if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, projectName, "start", python_runtime) {
             if nextPhase != gameState.phaseName {
                 gameState.phaseName = nextPhase;
                 gameState.phaseTurn = 0;
-                let _ = phase::applyPhaseUpdate(&mut gameState, projectName, "start");
+                let _ = phase::applyPhaseUpdate(&mut gameState, projectName, "start", python_runtime);
             }
         }
     }

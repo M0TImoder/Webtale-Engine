@@ -2,11 +2,14 @@ use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use rand::Rng;
 use bevy_egui::EguiContexts;
-use pyo3::prelude::*;
-use pyo3::types::PyDict; 
+use rustpython_vm::builtins::PyDictRef;
+use rustpython_vm::compiler::Mode;
+use rustpython_vm::import::import_codeobj;
+use rustpython_vm::PyObjectRef;
 use crate::components::*;
-use crate::resources::*;
 use crate::constants::*;
+use crate::python_scripts;
+use crate::resources::*;
 use crate::systems::phase;
 
 pub fn battleFlowControl(
@@ -14,6 +17,7 @@ pub fn battleFlowControl(
     mut gameState: ResMut<GameState>,
     assetServer: Res<AssetServer>,
     gameFonts: Res<GameFonts>,
+    python_runtime: NonSend<PythonRuntime>,
     _time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>, 
     mut boxRes: ResMut<BattleBox>,
@@ -33,11 +37,11 @@ pub fn battleFlowControl(
         if bubbles.is_empty() {
             gameState.turnCount += 1;
             gameState.phaseTurn += 1;
-            if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "turn") {
+            if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "turn", &python_runtime) {
                 if nextPhase != gameState.phaseName {
                     gameState.phaseName = nextPhase;
                     gameState.phaseTurn = 1;
-                    let _ = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "turn");
+                    let _ = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "turn", &python_runtime);
                 }
             }
 
@@ -117,6 +121,7 @@ pub fn combatTurnManager(
     time: Res<Time>,
     mut gameState: ResMut<GameState>,
     mut battleBox: ResMut<BattleBox>,
+    python_runtime: NonSend<PythonRuntime>,
     bulletQuery: Query<Entity, With<PythonBullet>>,
     mut scripts: ResMut<DanmakuScripts>,
 ) {
@@ -134,162 +139,171 @@ pub fn combatTurnManager(
                 "frogJump".to_string() 
             };
             
-            let relativePath = format!("projects/{}/danmaku", PROJECT_NAME);
-            let scriptFilePath = format!("{}/{}.py", relativePath, scriptName);
-
-            let scriptContent = match std::fs::read_to_string(&scriptFilePath) {
-                Ok(content) => content,
-                Err(err) => {
-                    println!("Warning: script load {} {}", scriptFilePath, err);
-                    String::new()
+            let scriptContent = match python_scripts::get_danmaku_script(PROJECT_NAME, &scriptName) {
+                Some(content) => content,
+                None => {
+                    println!("Warning: script missing projects/{}/danmaku/{}.py", PROJECT_NAME, scriptName);
+                    return;
                 }
             };
-            
-            Python::with_gil(|py| {
-                let sys = PyModule::import_bound(py, "sys").expect("Failed to import sys");
-                let path = sys.getattr("path").expect("Failed to get sys.path");
-                
-                let envPath = std::env::current_dir().unwrap().join(&relativePath);
-                let _ = path.call_method1("append", (envPath.to_str().unwrap(),));
 
-                let apiPath = format!("{}/api.py", relativePath);
-                let apiContent = match std::fs::read_to_string(&apiPath) {
-                    Ok(content) => content,
-                    Err(err) => {
-                        println!("Warning: script load {} {}", apiPath, err);
-                        String::new()
+            let apiContent = match python_scripts::get_danmaku_api_script(PROJECT_NAME) {
+                Some(content) => content,
+                None => {
+                    println!("Warning: script missing projects/{}/danmaku/api.py", PROJECT_NAME);
+                    return;
+                }
+            };
+
+            python_runtime.interpreter.enter(|vm| {
+                let run_module = |code: &str, filename: &str, module_name: &str| -> Option<PyObjectRef> {
+                    let code_obj = match vm.compile(code, Mode::Exec, filename.to_string()) {
+                        Ok(code_obj) => code_obj,
+                        Err(err) => {
+                            println!("Warning: python compile {} {:?}", filename, err);
+                            return None;
+                        }
+                    };
+                    match import_codeobj(vm, module_name, code_obj, true) {
+                        Ok(module) => Some(module),
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            None
+                        }
                     }
                 };
 
-                if apiContent.is_empty() {
-                    return;
-                }
+                let apiModule = match run_module(apiContent, "api.py", "api") {
+                    Some(module) => module,
+                    None => return,
+                };
 
-                let apiModule = match PyModule::from_code_bound(py, &apiContent, "api.py", "api") {
-                    Ok(module) => module,
+                let sys = match vm.import("sys", 0) {
+                    Ok(sys) => sys,
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-
-                let modules = match sys.getattr("modules") {
+                let modules = match sys.get_attr("modules", vm) {
                     Ok(modules) => modules,
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-                if let Err(err) = modules.set_item("api", &apiModule) {
-                    err.print(py);
+                if let Err(err) = modules.set_item("api", apiModule.clone(), vm) {
+                    vm.print_exception(err.clone());
                     return;
                 }
 
-                if scriptContent.is_empty() {
-                    return;
-                }
-
-                let module = match PyModule::from_code_bound(py, &scriptContent, &format!("{}.py", scriptName), &scriptName) {
-                    Ok(module) => module,
-                    Err(err) => {
-                        err.print(py);
-                        return;
-                    }
+                let module = match run_module(scriptContent, &format!("{}.py", scriptName), &scriptName) {
+                    Some(module) => module,
+                    None => return,
                 };
-                
-                let initFunc = match module.getattr("init") {
+
+                let initFunc = match module.get_attr("init", vm) {
                     Ok(func) => func,
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-                let initResult = match initFunc.call0() {
+                let initResult = match vm.invoke(&initFunc, ()) {
                     Ok(result) => result,
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-                let initData: &Bound<PyDict> = match initResult.downcast() {
+                let initData: PyDictRef = match initResult.try_into_value(vm) {
                     Ok(result) => result,
                     Err(err) => {
-                        println!("Warning: danmaku init {}", err);
+                        vm.print_exception(err.clone());
+                        println!("Warning: danmaku init {:?}", err);
                         return;
                     }
                 };
-                
-                let boxDataObj = match initData.get_item("box") {
+
+                let boxDataObj = match initData.get_item_opt("box", vm) {
                     Ok(Some(value)) => value,
                     Ok(None) => {
                         println!("Warning: danmaku box missing");
                         return;
                     }
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-                let _boxData: Vec<f32> = match boxDataObj.extract() {
+                let _boxData: Vec<f32> = match boxDataObj.try_into_value(vm) {
                     Ok(value) => value,
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
 
-                let texturePathObj = match initData.get_item("textureWait") {
+                let texturePathObj = match initData.get_item_opt("textureWait", vm) {
                     Ok(Some(value)) => value,
                     Ok(None) => {
                         println!("Warning: danmaku textureWait missing");
                         return;
                     }
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-                let texturePath: String = match texturePathObj.extract() {
+                let texturePath: String = match texturePathObj.try_into_value(vm) {
                     Ok(value) => value,
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-                
+
                 let spawnX = ORIGIN_X + battleBox.current.max.x - 40.0;
                 let spawnY = ORIGIN_Y - battleBox.current.max.y + 40.0;
 
-                let spawnFunc = match module.getattr("spawn") {
+                let spawnFunc = match module.get_attr("spawn", vm) {
                     Ok(func) => func,
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-                let bulletObj: PyObject = match spawnFunc.call0() {
-                    Ok(result) => result.into(),
+                let bulletObj: PyObjectRef = match vm.invoke(&spawnFunc, ()) {
+                    Ok(result) => result,
                     Err(err) => {
-                        err.print(py);
+                        vm.print_exception(err.clone());
                         return;
                     }
                 };
-                
-                let bulletBound = bulletObj.bind(py);
-                if let Err(err) = bulletBound.call_method1("setPos", (spawnX, spawnY)) {
-                    err.print(py);
+
+                match bulletObj.get_attr("setPos", vm) {
+                    Ok(setPos) => {
+                        if let Err(err) = vm.invoke(&setPos, (spawnX, spawnY)) {
+                            vm.print_exception(err.clone());
+                        }
+                    }
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                    }
                 }
 
-                let damage = match bulletBound.getattr("damage") {
-                    Ok(value) => match value.extract::<i32>() {
+                let damage = match bulletObj.get_attr("damage", vm) {
+                    Ok(value) => match value.try_into_value::<i32>(vm) {
                         Ok(result) => result,
                         Err(err) => {
-                            println!("Warning: bullet damage {}", err);
+                            vm.print_exception(err.clone());
+                            println!("Warning: bullet damage {:?}", err);
                             0
                         }
                     },
                     Err(err) => {
-                        println!("Warning: bullet damage {}", err);
+                        vm.print_exception(err.clone());
+                        println!("Warning: bullet damage {:?}", err);
                         0
                     }
                 };
@@ -302,14 +316,14 @@ pub fn combatTurnManager(
                     },
                     PythonBullet {
                         scriptName: scriptName.clone(),
-                        bulletData: bulletObj,
+                        bulletData: bulletObj.clone(),
                         damage,
                     },
                     Cleanup,
                 ));
-                
-                scripts.modules.insert("api".to_string(), apiModule.into());
-                scripts.modules.insert(scriptName, module.into());
+
+                scripts.modules.insert("api".to_string(), apiModule);
+                scripts.modules.insert(scriptName, module);
             });
         }
 

@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use pyo3::prelude::*;
 use crate::components::*;
 use crate::resources::*;
 
@@ -7,38 +6,88 @@ pub fn leapfrogBulletUpdate(
     mut commands: Commands,
     time: Res<Time>,
     assetServer: Res<AssetServer>,
+    python_runtime: NonSend<PythonRuntime>,
     mut query: Query<(Entity, &mut Transform, &PythonBullet, &mut Handle<Image>)>,
     _scripts: Res<DanmakuScripts>,
 ) {
     let dt = time.delta_seconds();
-    
-    Python::with_gil(|py| {
+
+    python_runtime.interpreter.enter(|vm| {
         for (entity, mut transform, bullet, mut texture) in query.iter_mut() {
-            let bulletObj = bullet.bulletData.bind(py);
-            
-            if let Err(e) = bulletObj.call_method1("sysUpdate", (dt,)) {
-                e.print(py);
+            let bulletObj = bullet.bulletData.clone();
+
+            let sysUpdate = match bulletObj.get_attr("sysUpdate", vm) {
+                Ok(func) => func,
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    continue;
+                }
+            };
+            if let Err(err) = vm.invoke(&sysUpdate, (dt,)) {
+                vm.print_exception(err.clone());
                 continue;
             }
-            
-            if let Ok(x) = bulletObj.getattr("x").and_then(|v| v.extract::<f32>()) {
-                if let Ok(y) = bulletObj.getattr("y").and_then(|v| v.extract::<f32>()) {
-                     transform.translation.x = x;
-                     transform.translation.y = y;
+
+            let x = match bulletObj.get_attr("x", vm) {
+                Ok(value) => match value.try_into_value::<f32>(vm) {
+                    Ok(result) => Some(result),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        None
+                    }
+                },
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    None
+                }
+            };
+            let y = match bulletObj.get_attr("y", vm) {
+                Ok(value) => match value.try_into_value::<f32>(vm) {
+                    Ok(result) => Some(result),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        None
+                    }
+                },
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    None
+                }
+            };
+            if let (Some(x), Some(y)) = (x, y) {
+                transform.translation.x = x;
+                transform.translation.y = y;
+            }
+
+            match bulletObj.get_attr("texture", vm) {
+                Ok(textureVal) => match textureVal.try_into_value::<Option<String>>(vm) {
+                    Ok(path) => {
+                        if let Some(path) = path {
+                            *texture = assetServer.load(path);
+                        }
+                    }
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                    }
+                },
+                Err(err) => {
+                    vm.print_exception(err.clone());
                 }
             }
 
-            if let Ok(textureVal) = bulletObj.getattr("texture") {
-                 if !textureVal.is_none() {
-                      if let Ok(path) = textureVal.extract::<String>() {
-                           *texture = assetServer.load(path);
-                      }
-                 }
-            }
-            
-            if let Ok(shouldDelete) = bulletObj.getattr("shouldDelete").and_then(|v| v.extract::<bool>()) {
-                if shouldDelete {
-                    commands.entity(entity).despawn();
+            match bulletObj.get_attr("shouldDelete", vm) {
+                Ok(value) => match value.try_into_value::<bool>(vm) {
+                    Ok(shouldDelete) => {
+                        if shouldDelete {
+                            commands.entity(entity).despawn();
+                        }
+                    }
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                    }
+                },
+                Err(err) => {
+                    vm.print_exception(err.clone());
                 }
             }
         }

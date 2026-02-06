@@ -1,44 +1,26 @@
 use bevy::prelude::Vec2;
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
-use std::fs;
+use rustpython_vm::builtins::PyDictRef;
+use rustpython_vm::compiler::Mode;
+use rustpython_vm::convert::ToPyObject;
+use rustpython_vm::import::import_codeobj;
+use rustpython_vm::PyObjectRef;
 use crate::constants::*;
-use crate::resources::GameState;
+use crate::python_scripts;
+use crate::resources::{GameState, PythonRuntime};
 
 pub fn resolveInitialPhase(projectName: &str, requested: &str) -> String {
-    let relativePath = format!("projects/{}/phases", projectName);
     if !requested.is_empty() {
-        let requestedPath = format!("{}/{}.py", relativePath, requested);
-        if fs::metadata(&requestedPath).is_ok() {
+        if python_scripts::get_phase_script(projectName, requested).is_some() {
             return requested.to_string();
         }
-        println!("Warning: phase script missing {}", requestedPath);
+        println!("Warning: phase script missing projects/{}/phases/{}.py", projectName, requested);
     }
 
-    let phase1Path = format!("{}/phase1.py", relativePath);
-    if fs::metadata(&phase1Path).is_ok() {
+    if python_scripts::get_phase_script(projectName, "phase1").is_some() {
         return "phase1".to_string();
     }
 
-    let entries = match fs::read_dir(&relativePath) {
-        Ok(entries) => entries,
-        Err(_) => return String::new(),
-    };
-
-    let mut phaseNames: Vec<String> = vec![];
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("wep") {
-            continue;
-        }
-        if let Some(stem) = path.file_stem().and_then(|value| value.to_str()) {
-            phaseNames.push(stem.to_string());
-        }
-    }
+    let mut phaseNames = python_scripts::list_phase_names(projectName);
     phaseNames.sort();
     phaseNames.first().cloned().unwrap_or_default()
 }
@@ -63,178 +45,188 @@ fn resolveBubbleTextureName(name: &str) -> String {
     .to_string()
 }
 
-pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &str) -> Option<String> {
+pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &str, python_runtime: &PythonRuntime) -> Option<String> {
     if gameState.phaseName.is_empty() {
         return None;
     }
 
     let phaseName = gameState.phaseName.clone();
-    let relativePath = format!("projects/{}/phases", projectName);
-    let scriptPath = format!("{}/{}.py", relativePath, phaseName);
-    let apiPath = format!("{}/phase_api.py", relativePath);
-
-    let scriptContent = match fs::read_to_string(&scriptPath) {
-        Ok(content) => content,
-        Err(err) => {
-            println!("Warning: phase script load {} {}", scriptPath, err);
+    let scriptContent = match python_scripts::get_phase_script(projectName, &phaseName) {
+        Some(content) => content,
+        None => {
+            println!("Warning: phase script missing projects/{}/phases/{}.py", projectName, phaseName);
             return None;
         }
     };
 
-    let apiContent = match fs::read_to_string(&apiPath) {
-        Ok(content) => content,
-        Err(err) => {
-            println!("Warning: phase api load {} {}", apiPath, err);
+    let apiContent = match python_scripts::get_phase_api_script(projectName) {
+        Some(content) => content,
+        None => {
+            println!("Warning: phase api missing projects/{}/phases/phase_api.py", projectName);
             return None;
         }
     };
 
     let mut nextPhase: Option<String> = None;
 
-    Python::with_gil(|py| {
-        let sys = match PyModule::import_bound(py, "sys") {
+    python_runtime.interpreter.enter(|vm| {
+        let run_module = |code: &str, filename: &str, module_name: &str| -> Option<PyObjectRef> {
+            let code_obj = match vm.compile(code, Mode::Exec, filename.to_string()) {
+                Ok(code_obj) => code_obj,
+                Err(err) => {
+                    println!("Warning: python compile {} {:?}", filename, err);
+                    return None;
+                }
+            };
+            match import_codeobj(vm, module_name, code_obj, true) {
+                Ok(module) => Some(module),
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    None
+                }
+            }
+        };
+
+        let apiModule = match run_module(apiContent, "phase_api.py", "phase_api") {
+            Some(module) => module,
+            None => return,
+        };
+
+        let sys = match vm.import("sys", 0) {
             Ok(sys) => sys,
             Err(err) => {
-                err.print(py);
+                vm.print_exception(err.clone());
                 return;
             }
         };
-        let path = match sys.getattr("path") {
-            Ok(path) => path,
-            Err(err) => {
-                err.print(py);
-                return;
-            }
-        };
-        if let Ok(envPath) = std::env::current_dir().map(|dir| dir.join(&relativePath)) {
-            if let Some(envStr) = envPath.to_str() {
-                let _ = path.call_method1("append", (envStr,));
-            }
-        }
-
-        let apiModule = match PyModule::from_code_bound(py, &apiContent, "phase_api.py", "phase_api") {
-            Ok(module) => module,
-            Err(err) => {
-                err.print(py);
-                return;
-            }
-        };
-
-        let modules = match sys.getattr("modules") {
+        let modules = match sys.get_attr("modules", vm) {
             Ok(modules) => modules,
             Err(err) => {
-                err.print(py);
+                vm.print_exception(err.clone());
                 return;
             }
         };
-        if let Err(err) = modules.set_item("phase_api", &apiModule) {
-            err.print(py);
+        if let Err(err) = modules.set_item("phase_api", apiModule.clone(), vm) {
+            vm.print_exception(err.clone());
             return;
         }
 
-        let context = PyDict::new_bound(py);
-        let _ = context.set_item("turn", gameState.turnCount);
-        let _ = context.set_item("phaseTurn", gameState.phaseTurn);
-        let _ = context.set_item("enemyHp", gameState.enemyHp);
-        let _ = context.set_item("enemyMaxHp", gameState.enemyMaxHp);
-        let _ = context.set_item("enemyName", gameState.enemyName.clone());
-        let _ = context.set_item("phase", phaseName.clone());
-        let _ = context.set_item("trigger", trigger);
-        let _ = context.set_item("isFirstTurn", gameState.turnCount == 1);
-        let _ = context.set_item("isPhaseStart", gameState.phaseTurn == 1);
-        let _ = context.set_item("isStart", trigger == "start");
-        let _ = context.set_item("isTurnStart", trigger == "turn");
-        let _ = context.set_item("isDamageApplied", trigger == "damage");
+        let context = vm.ctx.new_dict();
+        let _ = context.set_item("turn", vm.new_pyobj(gameState.turnCount), vm);
+        let _ = context.set_item("phaseTurn", vm.new_pyobj(gameState.phaseTurn), vm);
+        let _ = context.set_item("enemyHp", vm.new_pyobj(gameState.enemyHp), vm);
+        let _ = context.set_item("enemyMaxHp", vm.new_pyobj(gameState.enemyMaxHp), vm);
+        let _ = context.set_item("enemyName", vm.new_pyobj(gameState.enemyName.clone()), vm);
+        let _ = context.set_item("phase", vm.new_pyobj(phaseName.clone()), vm);
+        let _ = context.set_item("trigger", vm.new_pyobj(trigger), vm);
+        let _ = context.set_item("isFirstTurn", vm.new_pyobj(gameState.turnCount == 1), vm);
+        let _ = context.set_item("isPhaseStart", vm.new_pyobj(gameState.phaseTurn == 1), vm);
+        let _ = context.set_item("isStart", vm.new_pyobj(trigger == "start"), vm);
+        let _ = context.set_item("isTurnStart", vm.new_pyobj(trigger == "turn"), vm);
+        let _ = context.set_item("isDamageApplied", vm.new_pyobj(trigger == "damage"), vm);
         let lastAction = if gameState.lastPlayerAction.is_empty() {
-            None
+            vm.ctx.none()
         } else {
-            Some(gameState.lastPlayerAction.clone())
+            gameState.lastPlayerAction.clone().to_pyobject(vm)
         };
-        let _ = context.set_item("lastPlayerAction", lastAction);
-        let _ = context.set_item("lastActCommand", gameState.lastActCommand.clone());
+        let _ = context.set_item("lastPlayerAction", lastAction, vm);
+        let lastAct = match &gameState.lastActCommand {
+            Some(command) => command.clone().to_pyobject(vm),
+            None => vm.ctx.none(),
+        };
+        let _ = context.set_item("lastActCommand", lastAct, vm);
 
-        if let Ok(resetFunc) = apiModule.getattr("reset") {
-            if let Err(err) = resetFunc.call1((&context,)) {
-                err.print(py);
+        match apiModule.get_attr("reset", vm) {
+            Ok(resetFunc) => {
+                if let Err(err) = vm.invoke(&resetFunc, (context.clone(),)) {
+                    vm.print_exception(err.clone());
+                }
+            }
+            Err(err) => {
+                vm.print_exception(err.clone());
             }
         }
 
-        let phaseModule = match PyModule::from_code_bound(py, &scriptContent, &format!("{}.py", phaseName), &phaseName) {
-            Ok(module) => module,
-            Err(err) => {
-                err.print(py);
-                return;
-            }
+        let phaseModule = match run_module(scriptContent, &format!("{}.py", phaseName), &phaseName) {
+            Some(module) => module,
+            None => return,
         };
 
-        let updateFunc = match phaseModule.getattr("update") {
+        let updateFunc = match phaseModule.get_attr("update", vm) {
             Ok(func) => func,
             Err(err) => {
-                println!("Warning: phase update missing {}", err);
+                vm.print_exception(err.clone());
+                println!("Warning: phase update missing {:?}", err);
                 return;
             }
         };
 
-        let updateResult = match updateFunc.call1((&context,)) {
+        let updateResult = match vm.invoke(&updateFunc, (context.clone(),)) {
             Ok(result) => result,
             Err(err) => {
-                err.print(py);
+                vm.print_exception(err.clone());
                 return;
             }
         };
 
-        let readOptionString = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<String> {
-            match dict.get_item(key) {
-                Ok(Some(value)) => match value.extract::<Option<String>>() {
+        let readOptionString = |dict: &PyDictRef, key: &str, label: &str| -> Option<String> {
+            match dict.get_item_opt(key, vm) {
+                Ok(Some(value)) => match value.try_into_value::<Option<String>>(vm) {
                     Ok(result) => result,
                     Err(err) => {
-                        println!("Warning: {} {} {}", label, key, err);
+                        vm.print_exception(err.clone());
+                        println!("Warning: {} {} {:?}", label, key, err);
                         None
                     }
                 },
                 Ok(None) => None,
                 Err(err) => {
-                    println!("Warning: {} {} {}", label, key, err);
+                    vm.print_exception(err.clone());
+                    println!("Warning: {} {} {:?}", label, key, err);
                     None
                 }
             }
         };
 
-        let readOptionVecString = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<Vec<String>> {
-            match dict.get_item(key) {
-                Ok(Some(value)) => match value.extract::<Option<Vec<String>>>() {
+        let readOptionVecString = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<String>> {
+            match dict.get_item_opt(key, vm) {
+                Ok(Some(value)) => match value.try_into_value::<Option<Vec<String>>>(vm) {
                     Ok(result) => result,
                     Err(err) => {
-                        println!("Warning: {} {} {}", label, key, err);
+                        vm.print_exception(err.clone());
+                        println!("Warning: {} {} {:?}", label, key, err);
                         None
                     }
                 },
                 Ok(None) => None,
                 Err(err) => {
-                    println!("Warning: {} {} {}", label, key, err);
+                    vm.print_exception(err.clone());
+                    println!("Warning: {} {} {:?}", label, key, err);
                     None
                 }
             }
         };
 
-        let readOptionVecF32 = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<Vec<f32>> {
-            match dict.get_item(key) {
-                Ok(Some(value)) => match value.extract::<Option<Vec<f32>>>() {
+        let readOptionVecF32 = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<f32>> {
+            match dict.get_item_opt(key, vm) {
+                Ok(Some(value)) => match value.try_into_value::<Option<Vec<f32>>>(vm) {
                     Ok(result) => result,
                     Err(err) => {
-                        println!("Warning: {} {} {}", label, key, err);
+                        vm.print_exception(err.clone());
+                        println!("Warning: {} {} {:?}", label, key, err);
                         None
                     }
                 },
                 Ok(None) => None,
                 Err(err) => {
-                    println!("Warning: {} {} {}", label, key, err);
+                    vm.print_exception(err.clone());
+                    println!("Warning: {} {} {:?}", label, key, err);
                     None
                 }
             }
         };
 
-        let mut applyState = |stateDict: &Bound<PyDict>| {
+        let mut applyState = |stateDict: &PyDictRef| {
             if let Some(dialogText) = readOptionString(stateDict, "dialogText", "phase") {
                 gameState.enemyDialogText = dialogText.clone();
                 if gameState.mnFight == 0 && gameState.myFight == 0 && gameState.menuLayer == MENU_LAYER_TOP {
@@ -271,17 +263,20 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             nextPhase = readOptionString(stateDict, "nextPhase", "phase");
         };
 
-        if let Ok(dict) = updateResult.downcast::<PyDict>() {
-            applyState(dict);
+        if let Ok(dict) = updateResult.try_into_value::<PyDictRef>(vm) {
+            applyState(&dict);
             return;
         }
 
-        if let Ok(getState) = apiModule.getattr("getState") {
-            if let Ok(stateResult) = getState.call0() {
-                if let Ok(dict) = stateResult.downcast::<PyDict>() {
-                    applyState(dict);
-                }
-            }
+        match apiModule.get_attr("getState", vm) {
+            Ok(getState) => match vm.invoke(&getState, ()) {
+                Ok(stateResult) => match stateResult.try_into_value::<PyDictRef>(vm) {
+                    Ok(dict) => applyState(&dict),
+                    Err(err) => vm.print_exception(err),
+                },
+                Err(err) => vm.print_exception(err),
+            },
+            Err(err) => vm.print_exception(err),
         }
     });
 

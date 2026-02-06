@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use pyo3::prelude::*;
+use rustpython_vm::PyObjectRef;
 
 #[derive(Component)]
 pub struct Cleanup;
@@ -102,7 +102,7 @@ pub struct EditorWindow;
 #[derive(Component)]
 pub struct PythonBullet {
     pub scriptName: String,
-    pub bulletData: PyObject, 
+    pub bulletData: PyObjectRef,
     pub damage: i32,
 }
 

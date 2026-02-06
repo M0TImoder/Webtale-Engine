@@ -7,6 +7,7 @@ use bevy_egui::EguiPlugin;
 mod constants;
 mod components;
 mod resources;
+mod python_scripts;
 mod systems;
 
 use constants::*;
@@ -43,6 +44,7 @@ fn main() {
         .init_resource::<EditorPreviewTexture>()
         .init_resource::<DanmakuPreviewTexture>()
         .init_resource::<DanmakuScripts>()
+        .insert_non_send_resource(PythonRuntime::default())
         .add_systems(Startup, (
             setup::setup,
             input::spawnInitialEditorWindow,

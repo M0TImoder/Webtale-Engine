@@ -213,6 +213,7 @@ pub fn handleGlobalInput(
     mut exitWriter: EventWriter<AppExit>,
     assetServer: Res<AssetServer>,
     gameFonts: Res<GameFonts>,
+    python_runtime: NonSend<PythonRuntime>,
     cleanupQuery: Query<Entity, With<Cleanup>>,
     allEditorEntities: Query<Entity, With<EditorWindow>>, 
     openEditorWindowQuery: Query<Entity, (With<EditorWindow>, With<Window>)>, 
@@ -285,7 +286,7 @@ pub fn handleGlobalInput(
                 target: Rect::new(32.0, 250.0, 602.0, 385.0),
             });
 
-            spawnGameObjects(&mut commands, &assetServer, &gameFonts);
+            spawnGameObjects(&mut commands, &assetServer, &gameFonts, &python_runtime);
         }
     }
 

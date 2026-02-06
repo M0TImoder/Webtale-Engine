@@ -11,7 +11,9 @@ web-sys = { version = "0.3", features = ["console"] }
 console_error_panic_hook = "0.1"
 uuid = { version = "1.18", features = ["v4", "js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
-pyo3 = { version = "0.21", features = ["auto-initialize"] }
+rustpython-vm = { version = "0.3", features = ["threading"] }
+rustpython-stdlib = { version = "0.3", features = ["threading"] }
+rustpython-pylib = { version = "0.3", features = ["freeze-stdlib"] }
 
 [profile.release]
 opt-level = "s"

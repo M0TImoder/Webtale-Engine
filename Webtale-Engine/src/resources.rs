@@ -1,5 +1,8 @@
 use bevy::prelude::*;
-use pyo3::prelude::*;
+use rand::Rng;
+use rustpython_vm::function::ArgIntoFloat;
+use rustpython_vm::Interpreter;
+use rustpython_vm::PyObjectRef;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -15,7 +18,46 @@ pub struct ItemDictionary(pub HashMap<String, ItemInfo>);
 
 #[derive(Resource, Default)]
 pub struct DanmakuScripts {
-    pub modules: HashMap<String, PyObject>,
+    pub modules: HashMap<String, PyObjectRef>,
+}
+
+pub struct PythonRuntime {
+    pub interpreter: Interpreter,
+}
+
+impl Default for PythonRuntime {
+    fn default() -> Self {
+        let interpreter = Interpreter::with_init(Default::default(), |vm| {
+            vm.add_native_modules(rustpython_stdlib::get_module_inits());
+            vm.add_frozen(rustpython_pylib::FROZEN_STDLIB);
+        });
+        interpreter.enter(|vm| {
+            fn random_random() -> f64 {
+                rand::thread_rng().gen::<f64>()
+            }
+
+            fn random_uniform(a: ArgIntoFloat, b: ArgIntoFloat) -> f64 {
+                let a = f64::from(a);
+                let b = f64::from(b);
+                rand::thread_rng().gen_range(a..b)
+            }
+
+            let dict = vm.ctx.new_dict();
+            let module = vm.new_module("random", dict.clone(), None);
+            let random_fn = vm.new_function("random", random_random);
+            let uniform_fn = vm.new_function("uniform", random_uniform);
+            if let Err(err) = dict.set_item("random", random_fn.into(), vm) {
+                vm.print_exception(err.clone());
+            }
+            if let Err(err) = dict.set_item("uniform", uniform_fn.into(), vm) {
+                vm.print_exception(err.clone());
+            }
+            if let Ok(modules) = vm.sys_module.get_attr("modules", vm) {
+                let _ = modules.set_item("random", module.into(), vm);
+            }
+        });
+        Self { interpreter }
+    }
 }
 
 #[derive(Resource)]
