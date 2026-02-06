@@ -402,6 +402,8 @@ pub fn menuInputSystem(
                 }
             },
             MENU_LAYER_FIGHT_TARGET => {
+                gameState.lastPlayerAction = "attack".to_string();
+                gameState.lastActCommand = None;
                 gameState.mnFight = 4; 
                 let boxCenter = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
                 commands.spawn((
@@ -439,6 +441,8 @@ pub fn menuInputSystem(
                 if let Some(acts) = actCommandsQuery.iter().next() {
                     if actIdx < acts.commands.len() {
                         let cmdName = &acts.commands[actIdx];
+                        gameState.lastPlayerAction = "act".to_string();
+                        gameState.lastActCommand = Some(cmdName.clone());
                         if let Some(text) = gameState.enemyActTexts.get(cmdName) {
                             textToDisplay = text.clone();
                         } else if cmdName == "Check" {
@@ -475,6 +479,8 @@ pub fn menuInputSystem(
                 let itemIndex = (gameState.itemPage * ITEMS_PER_PAGE) + gameState.menuCoords[MENU_LAYER_ITEM as usize] as usize;
                 
                 if itemIndex < gameState.inventory.len() {
+                    gameState.lastPlayerAction = "item".to_string();
+                    gameState.lastActCommand = None;
                     let itemName = gameState.inventory.remove(itemIndex);
                     
                     let (healAmount, flavorText) = if let Some(info) = itemDict.0.get(&itemName) {
@@ -520,6 +526,12 @@ pub fn menuInputSystem(
             },
             MENU_LAYER_MERCY => {
                 let mercyIdx = gameState.menuCoords[MENU_LAYER_MERCY as usize];
+                gameState.lastActCommand = None;
+                gameState.lastPlayerAction = if mercyIdx == 0 {
+                    "spare".to_string()
+                } else {
+                    "flee".to_string()
+                };
                 let text = if mercyIdx == 0 {
                     "* Spare... nothing happened.".to_string()
                 } else {

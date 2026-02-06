@@ -4,6 +4,7 @@ use bevy_egui::EguiContexts;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
+use crate::systems::phase;
 
 pub fn attackBarUpdate(
     mut commands: Commands,
@@ -114,6 +115,18 @@ pub fn applyPendingDamage(
             gameState.enemyHp = (gameState.enemyHp - pending.damage).max(0);
             let damage = pending.damage;
             let enemyPos = pending.targetPos;
+            gameState.lastActCommand = None;
+            gameState.lastPlayerAction = if damage > 0 {
+                "attackHit".to_string()
+            } else {
+                "attackMiss".to_string()
+            };
+            if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "damage") {
+                if nextPhase != gameState.phaseName {
+                    gameState.phaseName = nextPhase;
+                    gameState.phaseTurn = 0;
+                }
+            }
 
             let textStartPos = enemyPos + Vec3::new(0.0, 50.0, Z_DAMAGE_TEXT);
 

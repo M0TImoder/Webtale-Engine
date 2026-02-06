@@ -47,6 +47,11 @@ pub struct GameState {
     pub enemyScale: f32,
     
     pub enemyAttacks: Vec<String>,
+    pub phaseName: String,
+    pub phaseTurn: i32,
+    pub turnCount: i32,
+    pub enemyBubbleTexture: String,
+    pub enemyBubbleMessageOverride: Option<String>,
 
     pub mnFight: i32,
     pub myFight: i32,
@@ -66,6 +71,8 @@ pub struct GameState {
     pub turnTimer: f32,
     
     pub invincibilityTimer: f32,
+    pub lastPlayerAction: String,
+    pub lastActCommand: Option<String>,
 }
 
 #[derive(Resource)]

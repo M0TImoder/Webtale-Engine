@@ -6,6 +6,7 @@ def getEnemyStatus():
         "enemyAtk": 4,
         "enemyDef": 5,
         "dialogText": "* Froggit hops close!",
+        "phaseScript": "PhaseExample",
         "attackPatterns": ["frogJump"],
         "actCommands": ["Check", "Compliment", "Threaten"],
         "actTexts": {

@@ -7,6 +7,7 @@ use pyo3::types::PyDict;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
+use crate::systems::phase;
 
 pub fn battleFlowControl(
     mut commands: Commands,
@@ -30,12 +31,27 @@ pub fn battleFlowControl(
 
     if gameState.mnFight == 1 {
         if bubbles.is_empty() {
+            gameState.turnCount += 1;
+            gameState.phaseTurn += 1;
+            if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "turn") {
+                if nextPhase != gameState.phaseName {
+                    gameState.phaseName = nextPhase;
+                    gameState.phaseTurn = 1;
+                    let _ = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "turn");
+                }
+            }
+
             boxRes.target = Rect::new(32.0, 250.0, 602.0, 385.0);
             let bubbleX = 320.0 + 40.0; 
             let bubbleY = 160.0 - 95.0; 
+            let bubbleTexture = if gameState.enemyBubbleTexture.is_empty() {
+                "blcon/spr_blconsm.png".to_string()
+            } else {
+                gameState.enemyBubbleTexture.clone()
+            };
             commands.spawn((
                 SpriteBundle {
-                    texture: assetServer.load("blcon/spr_blconsm.png"), 
+                    texture: assetServer.load(bubbleTexture), 
                     sprite: Sprite { 
                         color: Color::WHITE, 
                         custom_size: Some(Vec2::new(100.0, 80.0)), 
@@ -48,7 +64,9 @@ pub fn battleFlowControl(
                 SpeechBubble,
                 Cleanup,
             ));
-            let msg = if gameState.enemyBubbleMessages.is_empty() {
+            let msg = if let Some(message) = gameState.enemyBubbleMessageOverride.take() {
+                message
+            } else if gameState.enemyBubbleMessages.is_empty() {
                 println!("Warning: enemy bubble messages missing");
                 "...".to_string()
             } else {

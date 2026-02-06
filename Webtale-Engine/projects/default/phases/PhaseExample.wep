@@ -1,0 +1,9 @@
+import phase_api as phase
+
+def update(context):
+    turn = phase.getTurn()
+    if turn is None:
+        turn = 0
+    phase.setDialogText("* Turn {}".format(turn))
+    phase.setBubbleMessage("Turn {}".format(turn))
+    return phase.getState()

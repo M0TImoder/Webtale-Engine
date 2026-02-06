@@ -7,6 +7,7 @@ use std::fs;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
+use crate::systems::phase;
 
 pub fn setup(
     mut commands: Commands, 
@@ -67,6 +68,11 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         enemyBaseY: 0.0,
         enemyScale: 1.0,
         enemyAttacks: vec![],
+        phaseName: String::new(),
+        phaseTurn: 0,
+        turnCount: 0,
+        enemyBubbleTexture: "blcon/spr_blconsm.png".to_string(),
+        enemyBubbleMessageOverride: None,
 
         mnFight: 0, 
         myFight: 0,
@@ -83,6 +89,8 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         damageDisplayTimer: Timer::from_seconds(1.0, TimerMode::Once),
         turnTimer: -1.0,
         invincibilityTimer: 0.0,
+        lastPlayerAction: String::new(),
+        lastActCommand: None,
     };
 
     let projectName = PROJECT_NAME;
@@ -270,6 +278,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         println!("Warning: playerStatus invincibilityDuration invalid");
     }
 
+    let mut phaseScriptName = String::new();
     let enemyStatusPath = format!("projects/{}/properties/enemyStatus.wep", projectName);
     if let Ok(script) = fs::read_to_string(&enemyStatusPath) {
         Python::with_gil(|py| {
@@ -294,6 +303,9 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
                             }
                             if let Some(dialogText) = readString(dict, "dialogText", "enemyStatus") {
                                 gameState.enemyDialogText = dialogText;
+                            }
+                            if let Some(phaseScript) = readString(dict, "phaseScript", "enemyStatus") {
+                                phaseScriptName = phaseScript;
                             }
                             if let Some(attacks) = readVecString(dict, "attackPatterns", "enemyStatus") {
                                 gameState.enemyAttacks = attacks;
@@ -371,6 +383,17 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
 
     if gameState.enemyHeadTexture.is_empty() {
         println!("Warning: enemyStatus missing headTexture");
+    }
+
+    gameState.phaseName = phase::resolveInitialPhase(projectName, &phaseScriptName);
+    if !gameState.phaseName.is_empty() {
+        if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, projectName, "start") {
+            if nextPhase != gameState.phaseName {
+                gameState.phaseName = nextPhase;
+                gameState.phaseTurn = 0;
+                let _ = phase::applyPhaseUpdate(&mut gameState, projectName, "start");
+            }
+        }
     }
 
     if !gameState.enemyDialogText.is_empty() {
