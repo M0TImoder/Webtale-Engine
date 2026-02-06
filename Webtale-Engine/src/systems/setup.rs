@@ -73,6 +73,7 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         turnCount: 0,
         enemyBubbleTexture: "blcon/spr_blconsm.png".to_string(),
         enemyBubbleMessageOverride: None,
+        enemyBubblePosOverride: None,
 
         mnFight: 0, 
         myFight: 0,

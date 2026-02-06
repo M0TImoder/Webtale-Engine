@@ -10,6 +10,7 @@ def reset(context):
         "bubbleMessages": None,
         "bubbleMessage": None,
         "bubbleTexture": None,
+        "bubblePosition": None,
         "nextPhase": None,
     }
 
@@ -39,6 +40,9 @@ def setBubbleMessage(message):
 
 def setBubbleTexture(path):
     _state["bubbleTexture"] = path
+
+def setBubblePosition(x, y):
+    _state["bubblePosition"] = [x, y]
 
 def setNextPhase(name):
     _state["nextPhase"] = name

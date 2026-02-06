@@ -42,8 +42,9 @@ pub fn battleFlowControl(
             }
 
             boxRes.target = Rect::new(32.0, 250.0, 602.0, 385.0);
-            let bubbleX = 320.0 + 40.0; 
-            let bubbleY = 160.0 - 95.0; 
+            let bubblePos = gameState.enemyBubblePosOverride.unwrap_or(Vec2::new(320.0 + 40.0, 160.0 - 95.0));
+            let bubbleX = bubblePos.x; 
+            let bubbleY = bubblePos.y; 
             let bubbleTexture = if gameState.enemyBubbleTexture.is_empty() {
                 "blcon/spr_blconsm.png".to_string()
             } else {

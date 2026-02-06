@@ -52,6 +52,7 @@ pub struct GameState {
     pub turnCount: i32,
     pub enemyBubbleTexture: String,
     pub enemyBubbleMessageOverride: Option<String>,
+    pub enemyBubblePosOverride: Option<Vec2>,
 
     pub mnFight: i32,
     pub myFight: i32,

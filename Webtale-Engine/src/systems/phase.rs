@@ -1,3 +1,4 @@
+use bevy::prelude::Vec2;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::fs;
@@ -40,6 +41,26 @@ pub fn resolveInitialPhase(projectName: &str, requested: &str) -> String {
     }
     phaseNames.sort();
     phaseNames.first().cloned().unwrap_or_default()
+}
+
+fn resolveBubbleTextureName(name: &str) -> String {
+    match name {
+        "blconabove" => "blcon/spr_blconabove.png",
+        "blconbelow" => "blcon/spr_blconbelow.png",
+        "blconsm" => "blcon/spr_blconsm.png",
+        "blconsm2" => "blcon/spr_blconsm2.png",
+        "blconsm2_shrt" => "blcon/spr_blconsm2_shrt.png",
+        "blconsm_plus1" => "blcon/spr_blconsm_plus1.png",
+        "blconsm_shrt" => "blcon/spr_blconsm_shrt.png",
+        "blcontiny" => "blcon/spr_blcontiny.png",
+        "blcontinyabove" => "blcon/spr_blcontinyabove.png",
+        "blcontl" => "blcon/spr_blcontl.png",
+        "blconwd" => "blcon/spr_blconwd.png",
+        "blconwdshrt" => "blcon/spr_blconwdshrt.png",
+        "blconwdshrt_l" => "blcon/spr_blconwdshrt_l.png",
+        _ => name,
+    }
+    .to_string()
 }
 
 pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &str) -> Option<String> {
@@ -196,6 +217,23 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         };
 
+        let readOptionVecF32 = |dict: &Bound<PyDict>, key: &str, label: &str| -> Option<Vec<f32>> {
+            match dict.get_item(key) {
+                Ok(Some(value)) => match value.extract::<Option<Vec<f32>>>() {
+                    Ok(result) => result,
+                    Err(err) => {
+                        println!("Warning: {} {} {}", label, key, err);
+                        None
+                    }
+                },
+                Ok(None) => None,
+                Err(err) => {
+                    println!("Warning: {} {} {}", label, key, err);
+                    None
+                }
+            }
+        };
+
         let mut applyState = |stateDict: &Bound<PyDict>| {
             if let Some(dialogText) = readOptionString(stateDict, "dialogText", "phase") {
                 gameState.enemyDialogText = dialogText.clone();
@@ -219,7 +257,15 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
 
             if let Some(texture) = readOptionString(stateDict, "bubbleTexture", "phase") {
-                gameState.enemyBubbleTexture = texture;
+                gameState.enemyBubbleTexture = resolveBubbleTextureName(&texture);
+            }
+
+            if let Some(pos) = readOptionVecF32(stateDict, "bubblePosition", "phase") {
+                if pos.len() == 2 {
+                    gameState.enemyBubblePosOverride = Some(Vec2::new(pos[0], pos[1]));
+                } else {
+                    println!("Warning: phase bubblePosition invalid");
+                }
             }
 
             nextPhase = readOptionString(stateDict, "nextPhase", "phase");
