@@ -1,20 +1,22 @@
 use bevy::prelude::*;
-use bevy::asset::AssetMetaCheck;
+use bevy::asset::{AssetMetaCheck, AssetPlugin};
 use bevy_egui::EguiPlugin;
 
 mod constants;
 mod components;
 mod resources;
 mod python_scripts;
+mod python_utils;
 mod systems;
 
 use constants::*;
 use resources::*;
 use systems::*;
 
+// アプリ起動
 fn main() {
     App::new()
-        .insert_resource(AssetMetaCheck::Never)
+        // プラグイン設定
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
@@ -30,38 +32,50 @@ fn main() {
                     close_when_requested: false,
                     ..default()
                 })
-                .set(ImagePlugin::default_nearest()),
+                .set(ImagePlugin::default_nearest())
+                .set(AssetPlugin {
+                    meta_check: AssetMetaCheck::Never,
+                    ..default()
+                }),
         )
+        // UIプラグイン
         .add_plugins(EguiPlugin)
+        // クリアカラー
         .insert_resource(ClearColor(Color::BLACK))
+        // バトルボックス初期値
         .insert_resource(BattleBox {
             current: Rect::new(32.0, 250.0, 602.0, 385.0),
             target: Rect::new(32.0, 250.0, 602.0, 385.0),
         })
+        // エディタリソース
         .init_resource::<EditorState>()
         .init_resource::<EditorPreviewTexture>()
         .init_resource::<DanmakuPreviewTexture>()
         .init_resource::<DanmakuScripts>()
+        // メニュー描画キャッシュ
+        .init_resource::<MenuRenderCache>()
+        // Python実行環境
         .insert_non_send_resource(PythonRuntime::default())
+        // 起動システム
         .add_systems(Startup, (
             setup::setup,
             input::spawn_initial_editor_window,
         ))
-        .add_systems(Update, (
-            input::handle_global_input,
-            setup::camera_scaling_system,
-            input::menu_input_system,
-            ui::menu_render_system,
-            player::soul_position_sync,
-            player::soul_combat_movement,
-            ui::update_box_size,
-            ui::draw_battle_box,
-            ui::draw_ui_status,
-            ui::update_button_sprites,
-            ui::animate_text,
-            ui::animate_enemy_head, 
-            editor::editor_ui_system,
-        ))
+        // 更新システム
+        .add_systems(Update, input::handle_global_input)
+        .add_systems(Update, setup::camera_scaling_system)
+        .add_systems(Update, input::menu_input_system)
+        .add_systems(Update, ui::menu_render_system)
+        .add_systems(Update, player::soul_position_sync)
+        .add_systems(Update, player::soul_combat_movement)
+        .add_systems(Update, ui::update_box_size)
+        .add_systems(Update, ui::draw_battle_box)
+        .add_systems(Update, ui::draw_ui_status)
+        .add_systems(Update, ui::update_button_sprites)
+        .add_systems(Update, ui::animate_text)
+        .add_systems(Update, ui::animate_enemy_head)
+        .add_systems(Update, editor::editor_ui_system)
+        // 戦闘システム
         .add_systems(Update, (
             combat::battle_flow_control,
             combat::attack_bar_update,
@@ -71,6 +85,8 @@ fn main() {
             combat::enemy_hp_bar_update,    
             combat::vaporize_enemy_system, 
             combat::dust_particle_update,
+        ))
+        .add_systems(Update, (
             combat::leapfrog_bullet_update,
             combat::combat_turn_manager,
             combat::soul_collision_detection,

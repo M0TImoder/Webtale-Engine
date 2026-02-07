@@ -3,6 +3,7 @@ use bevy_egui::{egui, EguiContexts};
 use crate::components::{EditorWindow, BattleScreenPreview};
 use crate::resources::{PlayerState, EditorState, EditorTab, EditorPreviewTexture, DanmakuPreviewTexture, BattleBox};
 
+// エディタUI
 pub fn editor_ui_system(
     mut contexts: EguiContexts,
     window_query: Query<Entity, (With<EditorWindow>, With<Window>)>,
@@ -17,7 +18,7 @@ pub fn editor_ui_system(
 
     let _battle_texture_id = contexts.add_image(preview_texture.0.clone());
     let danmaku_texture_id = contexts.add_image(danmaku_preview_texture.0.clone());
-    let ctx = contexts.ctx_for_window_mut(editor_entity);
+    let ctx = contexts.ctx_for_entity_mut(editor_entity);
 
     for mut vis in bg_sprite_query.iter_mut() {
         if editor_state.current_tab == EditorTab::Battle {

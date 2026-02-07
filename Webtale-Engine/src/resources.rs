@@ -5,6 +5,7 @@ use rustpython_vm::Interpreter;
 use rustpython_vm::PyObjectRef;
 use std::collections::HashMap;
 
+// アイテム情報
 #[derive(Clone, Debug)]
 pub struct ItemInfo {
     pub heal_amount: i32,
@@ -13,14 +14,17 @@ pub struct ItemInfo {
     pub text: String,
 }
 
+// アイテム辞書
 #[derive(Resource, Default)]
 pub struct ItemDictionary(pub HashMap<String, ItemInfo>);
 
+// 弾幕スクリプトキャッシュ
 #[derive(Resource, Default)]
 pub struct DanmakuScripts {
     pub modules: HashMap<String, PyObjectRef>,
 }
 
+// Python実行環境
 pub struct PythonRuntime {
     pub interpreter: Interpreter,
 }
@@ -109,11 +113,62 @@ pub struct MenuState {
     pub dialog_text: String,
 }
 
+// メニュー描画キー
+#[derive(Clone, PartialEq)]
+pub struct MenuRenderKey {
+    pub menu_layer: i32,
+    pub menu_coords: Vec<i32>,
+    pub item_page: usize,
+    pub dialog_text: String,
+    pub enemy_name: String,
+    pub enemy_hp: i32,
+    pub enemy_max_hp: i32,
+    pub act_commands: Vec<String>,
+    pub inventory: Vec<String>,
+}
+
+// メニュー描画キャッシュ
+#[derive(Resource, Default)]
+pub struct MenuRenderCache {
+    pub key: Option<MenuRenderKey>,
+}
+
+// 戦闘メイン状態
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MainFightState {
+    Menu,
+    EnemyDialog,
+    EnemyAttack,
+    TurnCleanup,
+    PlayerAttackBar,
+    PlayerAttackResolve,
+    PlayerDefeated,
+}
+
+impl Default for MainFightState {
+    fn default() -> Self {
+        Self::Menu
+    }
+}
+
+// メッセージ状態
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MessageFightState {
+    None,
+    PlayerActionText,
+}
+
+impl Default for MessageFightState {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 // 戦闘フロー制御
 #[derive(Resource)]
 pub struct CombatState {
-    pub mn_fight: i32,
-    pub my_fight: i32,
+    pub mn_fight: MainFightState,
+    pub my_fight: MessageFightState,
     pub phase_name: String,
     pub phase_turn: i32,
     pub turn_count: i32,
@@ -124,12 +179,14 @@ pub struct CombatState {
     pub last_act_command: Option<String>,
 }
 
+// バトルボックス
 #[derive(Resource)]
 pub struct BattleBox {
     pub current: Rect,
     pub target: Rect,
 }
 
+// フォント管理
 #[derive(Resource)]
 pub struct GameFonts {
     pub main: Handle<Font>,
@@ -138,6 +195,7 @@ pub struct GameFonts {
     pub damage: Handle<Font>, 
 }
 
+// エディタタブ
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
 pub enum EditorTab {
     #[default]
@@ -145,13 +203,16 @@ pub enum EditorTab {
     DanmakuPreview,
 }
 
+// エディタ状態
 #[derive(Resource, Default)]
 pub struct EditorState {
     pub current_tab: EditorTab,
 }
 
+// エディタプレビュー
 #[derive(Resource, Default)]
 pub struct EditorPreviewTexture(pub Handle<Image>);
 
+// 弾幕プレビュー
 #[derive(Resource, Default)]
 pub struct DanmakuPreviewTexture(pub Handle<Image>);

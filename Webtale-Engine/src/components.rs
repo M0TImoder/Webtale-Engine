@@ -1,15 +1,19 @@
 use bevy::prelude::*;
 use rustpython_vm::PyObjectRef;
 
+// クリーンアップタグ
 #[derive(Component)]
 pub struct Cleanup;
 
+// メインカメラタグ
 #[derive(Component)]
 pub struct MainCamera;
 
+// ソウルタグ
 #[derive(Component)]
 pub struct Soul;
 
+// ボタン表示
 #[derive(Component)]
 pub struct ButtonVisual {
     pub index: i32,
@@ -17,12 +21,14 @@ pub struct ButtonVisual {
     pub selected_texture: Handle<Image>,
 }
 
+// HP表示タグ
 #[derive(Component)] pub struct HpBarRed;
 #[derive(Component)] pub struct HpBarYellow;
 #[derive(Component)] pub struct HpText;
 #[derive(Component)] pub struct LvText;
 #[derive(Component)] pub struct PlayerNameText;
 
+// タイプライター
 #[derive(Component)]
 pub struct Typewriter {
     pub full_text: String,
@@ -31,11 +37,13 @@ pub struct Typewriter {
     pub finished: bool,
 }
 
+// 敵表示タグ
 #[derive(Component)] pub struct EnemyBody; 
 #[derive(Component)] pub struct EnemyHead { pub base_y: f32, pub timer: f32 }
 #[derive(Component)] pub struct ActCommands { pub commands: Vec<String> }
 #[derive(Component)] pub struct MenuTextItem { pub layer: i32, pub index: i32 }
 #[derive(Component)] pub struct MainDialogText;
+// 演出タグ
 #[derive(Component)] pub struct Vaporizing { pub scan_line: f32, pub image_handle: Handle<Image>, pub initial_y: f32 }
 #[derive(Component)] pub struct DustParticle { pub velocity: Vec3, pub timer: Timer, pub max_alpha: f32 }
 #[derive(Component)] pub struct SpeechBubble;
@@ -49,6 +57,7 @@ pub struct Typewriter {
 #[derive(Component)] pub struct BorderVisual;
 #[derive(Component)] pub struct BackgroundVisual;
 
+// 弾幕データ
 #[derive(Component)]
 pub struct LeapFrogBullet {
     pub state: LeapFrogState,
@@ -63,6 +72,7 @@ pub enum LeapFrogState {
     Jumping,
 }
 
+// ゲームオーバー演出
 #[derive(Component)]
 pub struct HeartDefeated {
     pub timer: Timer,
@@ -75,12 +85,14 @@ pub enum HeartDefeatedState {
     Cracked,
 }
 
+// 破片データ
 #[derive(Component)]
 pub struct HeartShard {
     pub velocity: Vec3,
     pub gravity: f32,
 }
 
+// ゲームオーバー進行
 #[derive(Component)]
 pub struct GameOverSequence {
     pub timer: Timer,
@@ -93,12 +105,15 @@ pub enum GameOverSequenceState {
     Finished,   
 }
 
+// ゲームオーバー表示
 #[derive(Component)]
 pub struct GameOverLogo;
 
+// エディタウィンドウ
 #[derive(Component)]
 pub struct EditorWindow;
 
+// Python弾幕
 #[derive(Component)]
 pub struct PythonBullet {
     pub script_name: String,
@@ -106,5 +121,6 @@ pub struct PythonBullet {
     pub damage: i32,
 }
 
+// プレビュー表示
 #[derive(Component)]
 pub struct BattleScreenPreview;

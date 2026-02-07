@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use rand::Rng;
 use crate::components::*;
 
+// 蒸発演出
 pub fn vaporize_enemy_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -22,7 +23,7 @@ pub fn vaporize_enemy_system(
         let texture_height = image.texture_descriptor.size.height as f32;
         
         let prev_line = vap.scan_line;
-        vap.scan_line += scan_speed * time.delta_seconds();
+        vap.scan_line += scan_speed * time.delta_secs();
 
         let start_y = prev_line as u32;
         let end_y = (vap.scan_line as u32).min(texture_height as u32);
@@ -93,6 +94,7 @@ pub fn vaporize_enemy_system(
     }
 }
 
+// 粒子更新
 pub fn dust_particle_update(
     mut commands: Commands,
     time: Res<Time>,
@@ -101,10 +103,10 @@ pub fn dust_particle_update(
     for (entity, mut transform, mut sprite, mut dust) in query.iter_mut() {
         dust.timer.tick(time.delta());
         
-        transform.translation += dust.velocity * time.delta_seconds();
+        transform.translation += dust.velocity * time.delta_secs();
 
         let alpha = dust.max_alpha * (1.0 - dust.timer.fraction());
-        sprite.color.set_a(alpha);
+        sprite.color.set_alpha(alpha);
 
         if dust.timer.finished() {
             commands.entity(entity).despawn();

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use bevy::window::WindowMode;
+use bevy::ecs::system::SystemParam;
+use bevy::window::{MonitorSelection, WindowMode};
 use bevy::app::AppExit;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
 use bevy::render::view::RenderLayers;
@@ -15,6 +16,20 @@ use crate::resources::*;
 use crate::constants::*;
 use crate::systems::setup::spawn_game_objects;
 
+#[derive(SystemParam)]
+pub(crate) struct GlobalInputTextures<'w> {
+    images: ResMut<'w, Assets<Image>>,
+    editor_preview_texture: ResMut<'w, EditorPreviewTexture>,
+    danmaku_preview_texture: ResMut<'w, DanmakuPreviewTexture>,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct GlobalInputEvents<'w, 's> {
+    window_closed_reader: EventReader<'w, 's, WindowClosed>,
+    window_close_requested_reader: EventReader<'w, 's, WindowCloseRequested>,
+}
+
+// エディタウィンドウ生成
 fn spawn_editor_window(
     commands: &mut Commands,
     asset_server: &AssetServer,
@@ -71,8 +86,8 @@ fn spawn_editor_window(
                 ..default()
             },
             projection: OrthographicProjection {
-                scaling_mode: bevy::render::camera::ScalingMode::FixedVertical(480.0),
-                ..default()
+                scaling_mode: bevy::render::camera::ScalingMode::FixedVertical { viewport_height: 480.0 },
+                ..OrthographicProjection::default_2d()
             },
             transform: Transform::from_xyz(0.0, 0.0, 999.9), 
             ..default()
@@ -81,11 +96,12 @@ fn spawn_editor_window(
         EditorWindow, 
     ));
 
+    let editor_clear_color = Color::srgb_u8(0x22, 0x22, 0x22);
     commands.spawn((
         Camera2dBundle {
             camera: Camera {
                 target: RenderTarget::Window(WindowRef::Entity(editor_window)),
-                clear_color: ClearColorConfig::Custom(Color::hex("222222").unwrap()), 
+                clear_color: ClearColorConfig::Custom(editor_clear_color), 
                 ..default()
             },
             transform: Transform::from_xyz(0.0, 0.0, 999.9),
@@ -97,7 +113,7 @@ fn spawn_editor_window(
 
     commands.spawn((
         SpriteBundle {
-            texture: image_handle,
+            sprite: Sprite { image: image_handle, ..default() },
             transform: Transform::from_xyz(0.0, 75.0, 0.0), 
             ..default()
         },
@@ -134,8 +150,8 @@ fn spawn_editor_window(
                 ..default()
             },
             projection: OrthographicProjection {
-                scaling_mode: bevy::render::camera::ScalingMode::FixedVertical(480.0),
-                ..default()
+                scaling_mode: bevy::render::camera::ScalingMode::FixedVertical { viewport_height: 480.0 },
+                ..OrthographicProjection::default_2d()
             },
             transform: Transform::from_xyz(0.0, 0.0, 999.9), 
             ..default()
@@ -176,7 +192,7 @@ fn spawn_editor_window(
 
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load("player/spr_soul_0.png"),
+            sprite: Sprite { image: asset_server.load("player/spr_soul_0.png"), ..default() },
             transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, 2.0)),
             ..default()
         },
@@ -185,6 +201,7 @@ fn spawn_editor_window(
     ));
 }
 
+// エディタ初期生成
 pub fn spawn_initial_editor_window(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -206,6 +223,7 @@ pub fn spawn_initial_editor_window(
     }
 }
 
+// グローバル入力
 pub fn handle_global_input(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
@@ -214,17 +232,16 @@ pub fn handle_global_input(
     asset_server: Res<AssetServer>,
     game_fonts: Res<GameFonts>,
     python_runtime: NonSend<PythonRuntime>,
+    mut danmaku_scripts: ResMut<DanmakuScripts>,
+    mut menu_render_cache: ResMut<MenuRenderCache>,
     cleanup_query: Query<Entity, With<Cleanup>>,
     all_editor_entities: Query<Entity, With<EditorWindow>>, 
     open_editor_window_query: Query<Entity, (With<EditorWindow>, With<Window>)>, 
-    mut images: ResMut<Assets<Image>>,
     mut egui_contexts: EguiContexts,
-    mut editor_preview_texture: ResMut<EditorPreviewTexture>,
-    mut danmaku_preview_texture: ResMut<DanmakuPreviewTexture>,
-    mut window_closed_reader: EventReader<WindowClosed>,
-    mut window_close_requested_reader: EventReader<WindowCloseRequested>,
+    mut textures: GlobalInputTextures,
+    mut events: GlobalInputEvents,
 ) {
-    for close_requested in window_close_requested_reader.read() {
+    for close_requested in events.window_close_requested_reader.read() {
         if let Ok(editor_window) = open_editor_window_query.get_single() {
             if close_requested.window == editor_window {
                 exit_writer.send(AppExit::default());
@@ -239,7 +256,7 @@ pub fn handle_global_input(
         }
     }
 
-    for closed in window_closed_reader.read() {
+    for closed in events.window_closed_reader.read() {
         if let Ok(editor_window) = open_editor_window_query.get_single() {
             if closed.window == editor_window {
                 exit_writer.send(AppExit::default());
@@ -255,7 +272,7 @@ pub fn handle_global_input(
     if (input.pressed(KeyCode::AltLeft) || input.pressed(KeyCode::AltRight)) && input.just_pressed(KeyCode::Enter) {
         if let Ok((_, mut window)) = window_query.get_single_mut() {
             window.mode = match window.mode {
-                WindowMode::Windowed => WindowMode::BorderlessFullscreen,
+                WindowMode::Windowed => WindowMode::BorderlessFullscreen(MonitorSelection::Current),
                 _ => WindowMode::Windowed,
             };
         }
@@ -270,7 +287,7 @@ pub fn handle_global_input(
     if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyR) {
         let mut is_typing = false;
         if let Ok(editor_entity) = open_editor_window_query.get_single() {
-            let ctx = egui_contexts.ctx_for_window_mut(editor_entity);
+            let ctx = egui_contexts.ctx_for_entity_mut(editor_entity);
             if ctx.wants_keyboard_input() {
                 is_typing = true;
             }
@@ -280,12 +297,14 @@ pub fn handle_global_input(
             for entity in cleanup_query.iter() {
                 commands.entity(entity).despawn_recursive();
             }
-            
+
             commands.insert_resource(BattleBox {
                 current: Rect::new(32.0, 250.0, 602.0, 385.0),
                 target: Rect::new(32.0, 250.0, 602.0, 385.0),
             });
 
+            danmaku_scripts.modules.clear();
+            menu_render_cache.key = None;
             spawn_game_objects(&mut commands, &asset_server, &game_fonts, &python_runtime);
         }
     }
@@ -295,15 +314,16 @@ pub fn handle_global_input(
             spawn_editor_window(
                 &mut commands,
                 &asset_server,
-                &mut images,
-                &mut editor_preview_texture,
-                &mut danmaku_preview_texture,
+                &mut textures.images,
+                &mut textures.editor_preview_texture,
+                &mut textures.danmaku_preview_texture,
                 &all_editor_entities,
             );
         }
     }
 }
 
+// メニュー入力
 pub fn menu_input_system(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -321,7 +341,7 @@ pub fn menu_input_system(
     item_dict: Res<ItemDictionary>,
 ){
     if let Ok(editor_entity) = editor_query.get_single() {
-        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+        if egui_contexts.ctx_for_entity_mut(editor_entity).wants_keyboard_input() {
             return;
         }
     }
@@ -332,7 +352,7 @@ pub fn menu_input_system(
         }
     }
 
-    if combat_state.mn_fight != 0 || combat_state.my_fight != 0 { return; }
+    if combat_state.mn_fight != MainFightState::Menu || combat_state.my_fight != MessageFightState::None { return; }
     let layer = menu_state.menu_layer;
     let cursor_idx = menu_state.menu_coords[layer as usize] as usize;
     
@@ -408,12 +428,11 @@ pub fn menu_input_system(
             MENU_LAYER_FIGHT_TARGET => {
                 combat_state.last_player_action = "attack".to_string();
                 combat_state.last_act_command = None;
-                combat_state.mn_fight = 4; 
+                combat_state.mn_fight = MainFightState::PlayerAttackBar; 
                 let box_center = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
                 commands.spawn((
                     SpriteBundle {
-                        texture: asset_server.load("texture/attack/spr_target.png"),
-                        sprite: Sprite { custom_size: Some(Vec2::new(566.0, 120.0)), ..default() },
+                        sprite: Sprite { image: asset_server.load("texture/attack/spr_target.png"), custom_size: Some(Vec2::new(566.0, 120.0)), ..default() },
                         transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, Z_ATTACK_TARGET)),
                         ..default()
                     },
@@ -423,8 +442,7 @@ pub fn menu_input_system(
                 let bar_start_x = gml_to_bevy(32.0, 0.0).x;
                 commands.spawn((
                     SpriteBundle {
-                        texture: asset_server.load("texture/attack/spr_targetchoice_1.png"),
-                        sprite: Sprite { custom_size: Some(Vec2::new(14.0, 120.0)), ..default() },
+                        sprite: Sprite { image: asset_server.load("texture/attack/spr_targetchoice_1.png"), custom_size: Some(Vec2::new(14.0, 120.0)), ..default() },
                         transform: Transform::from_translation(Vec3::new(bar_start_x, box_center.y, Z_ATTACK_BAR)),
                         ..default()
                     },
@@ -461,19 +479,18 @@ pub fn menu_input_system(
                     }
                 }
                 
-                combat_state.my_fight = 2; 
+                combat_state.my_fight = MessageFightState::PlayerActionText; 
                 menu_state.dialog_text = text_to_display.clone();
                 
                 for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
                 if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
                 
                 commands.spawn((
-                    Text2dBundle {
-                        text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
-                        text_anchor: Anchor::TopLeft,
-                        transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
-                        ..default()
-                    },
+                    Text2d::new(""),
+                    TextFont { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0 * TEXT_SCALE, ..default() },
+                    TextColor(Color::WHITE),
+                    Anchor::TopLeft,
+                    Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                     Typewriter { full_text: text_to_display, visible_chars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
                     MainDialogText,
                     Cleanup,
@@ -510,18 +527,17 @@ pub fn menu_input_system(
                         }
                     }
 
-                    combat_state.my_fight = 2; 
+                    combat_state.my_fight = MessageFightState::PlayerActionText; 
                     
                     for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
                     if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
                     
                     commands.spawn((
-                        Text2dBundle {
-                            text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
-                            text_anchor: Anchor::TopLeft,
-                            transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
-                            ..default()
-                        },
+                        Text2d::new(""),
+                        TextFont { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0 * TEXT_SCALE, ..default() },
+                        TextColor(Color::WHITE),
+                        Anchor::TopLeft,
+                        Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                         Typewriter { full_text: text, visible_chars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
                         MainDialogText,
                         Cleanup,
@@ -542,17 +558,16 @@ pub fn menu_input_system(
                     "* Escaped...".to_string()
                 };
                 
-                combat_state.my_fight = 2;
+                combat_state.my_fight = MessageFightState::PlayerActionText;
                 for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
                 if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
 
                 commands.spawn((
-                    Text2dBundle {
-                        text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
-                        text_anchor: Anchor::TopLeft,
-                        transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
-                        ..default()
-                    },
+                    Text2d::new(""),
+                    TextFont { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0 * TEXT_SCALE, ..default() },
+                    TextColor(Color::WHITE),
+                    Anchor::TopLeft,
+                    Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                     Typewriter { full_text: text, visible_chars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
                     MainDialogText,
                     Cleanup,

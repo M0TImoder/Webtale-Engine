@@ -2,3 +2,4 @@ target/
 dist/
 **/__pycache__/
 AGENT.md
+PLAN.md

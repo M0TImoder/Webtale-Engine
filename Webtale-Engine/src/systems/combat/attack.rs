@@ -6,6 +6,7 @@ use crate::resources::*;
 use crate::constants::*;
 use crate::systems::phase;
 
+// 攻撃バー
 pub fn attack_bar_update(
     mut commands: Commands,
     time: Res<Time>,
@@ -13,26 +14,26 @@ pub fn attack_bar_update(
     mut combat_state: ResMut<CombatState>,
     player_state: Res<PlayerState>,
     asset_server: Res<AssetServer>,
-    mut query: Query<(Entity, &mut Transform, &mut AttackBar, &mut Handle<Image>)>,
+    mut query: Query<(Entity, &mut Transform, &mut AttackBar, &mut Sprite)>,
     enemy_query: Query<&Transform, (With<EnemyBody>, Without<AttackBar>)>,
     mut egui_contexts: EguiContexts,
     editor_query: Query<Entity, With<EditorWindow>>,
 ) {
     if let Ok(editor_entity) = editor_query.get_single() {
-        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+        if egui_contexts.ctx_for_entity_mut(editor_entity).wants_keyboard_input() {
             return;
         }
     }
 
-    if combat_state.mn_fight != 4 && combat_state.mn_fight != 5 { return; }
+    if combat_state.mn_fight != MainFightState::PlayerAttackBar && combat_state.mn_fight != MainFightState::PlayerAttackResolve { return; }
 
-    for (bar_entity, mut transform, mut bar, mut texture) in query.iter_mut() {
+    for (bar_entity, mut transform, mut bar, mut sprite) in query.iter_mut() {
         if bar.moving {
-            transform.translation.x += bar.speed * time.delta_seconds();
+            transform.translation.x += bar.speed * time.delta_secs();
             
             if bar.flash_state {
                  bar.flash_state = false;
-                 *texture = asset_server.load("texture/attack/spr_targetchoice_0.png");
+                 sprite.image = asset_server.load("texture/attack/spr_targetchoice_0.png");
             }
 
             let box_center_x = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 0.0).x;
@@ -44,7 +45,7 @@ pub fn attack_bar_update(
                     commands.entity(bar_entity).despawn();
                 } else {
                     bar.moving = false;
-                    *texture = asset_server.load("texture/attack/spr_targetchoice_1.png");
+                    sprite.image = asset_server.load("texture/attack/spr_targetchoice_1.png");
                     bar.flash_state = true; 
                 }
                 
@@ -68,7 +69,7 @@ pub fn attack_bar_update(
                 let wait_time = if damage > 0 {
                     commands.spawn((
                         SpriteBundle {
-                            texture: asset_server.load("texture/attack/spr_strike_0.png"),
+                            sprite: Sprite { image: asset_server.load("texture/attack/spr_strike_0.png"), ..default() },
                             transform: Transform {
                                 translation: enemy_pos + Vec3::new(0.0, 0.0, Z_SLICE),
                                 scale: Vec3::splat(2.0),
@@ -90,18 +91,19 @@ pub fn attack_bar_update(
                     target_pos: enemy_pos,
                 });
 
-                combat_state.mn_fight = 5; 
+                combat_state.mn_fight = MainFightState::PlayerAttackResolve; 
             }
         } else {
             if bar.flash_timer.tick(time.delta()).just_finished() {
                 bar.flash_state = !bar.flash_state;
                 let path = if bar.flash_state { "texture/attack/spr_targetchoice_1.png" } else { "texture/attack/spr_targetchoice_0.png" };
-                *texture = asset_server.load(path);
+                sprite.image = asset_server.load(path);
             }
         }
     }
 }
 
+// ダメージ適用
 pub fn apply_pending_damage(
     mut commands: Commands,
     time: Res<Time>,
@@ -161,8 +163,8 @@ pub fn apply_pending_damage(
                         let texture_path = format!("texture/dmgnum/spr_dmgnum_o_{}.png", char);
 
                         parent.spawn(SpriteBundle {
-                            texture: asset_server.load(texture_path),
                             sprite: Sprite { 
+                                image: asset_server.load(texture_path),
                                 color: Color::rgb(0.8, 0.0, 0.0), 
                                 custom_size: None,
                                 ..default() 
@@ -173,8 +175,8 @@ pub fn apply_pending_damage(
                     }
                 } else {
                     parent.spawn(SpriteBundle {
-                        texture: asset_server.load("texture/dmgnum/spr_dmgmiss_o.png"),
                         sprite: Sprite {
+                            image: asset_server.load("texture/dmgnum/spr_dmgmiss_o.png"),
                             color: Color::rgb(0.8, 0.8, 0.8), 
                             custom_size: None,
                             ..default()
@@ -204,7 +206,7 @@ pub fn apply_pending_damage(
                     Cleanup,
                 )).with_children(|parent| {
                     parent.spawn(SpriteBundle {
-                        sprite: Sprite { color: Color::DARK_GRAY, custom_size: Some(Vec2::new(bar_width_max, bar_height)), ..default() },
+                        sprite: Sprite { color: Color::srgb(0.25, 0.25, 0.25), custom_size: Some(Vec2::new(bar_width_max, bar_height)), ..default() },
                         transform: Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)), 
                         ..default()
                     });
@@ -230,25 +232,27 @@ pub fn apply_pending_damage(
     }
 }
 
+// 斬撃アニメ
 pub fn animate_slice_effect(
     mut commands: Commands,
     time: Res<Time>,
     asset_server: Res<AssetServer>,
-    mut query: Query<(Entity, &mut SliceEffect, &mut Handle<Image>)>,
+    mut query: Query<(Entity, &mut SliceEffect, &mut Sprite)>,
 ) {
-    for (entity, mut effect, mut texture) in query.iter_mut() {
+    for (entity, mut effect, mut sprite) in query.iter_mut() {
         if effect.timer.tick(time.delta()).just_finished() {
             effect.frame_index += 1;
             if effect.frame_index > 5 {
                 commands.entity(entity).despawn();
             } else {
                 let path = format!("texture/attack/spr_strike_{}.png", effect.frame_index);
-                *texture = asset_server.load(path);
+                sprite.image = asset_server.load(path);
             }
         }
     }
 }
 
+// ダメージ表示
 pub fn damage_number_update(
     mut commands: Commands,
     time: Res<Time>,
@@ -258,13 +262,13 @@ pub fn damage_number_update(
     mut query: Query<(Entity, &mut Transform, &mut DamageNumber), Without<EnemyBody>>,
     attack_bar_query: Query<Entity, With<AttackBar>>,
     target_box_query: Query<Entity, With<AttackTargetBox>>,
-    mut enemy_query: Query<(Entity, &mut Sprite, &Transform, &Handle<Image>), With<EnemyBody>>,
+    mut enemy_query: Query<(Entity, &mut Sprite, &Transform), With<EnemyBody>>,
 ) {
     for (entity, mut transform, mut dmg) in query.iter_mut() {
         dmg.timer.tick(time.delta());
         
-        transform.translation.y += dmg.velocity_y * time.delta_seconds();
-        dmg.velocity_y -= dmg.gravity * time.delta_seconds();
+        transform.translation.y += dmg.velocity_y * time.delta_secs();
+        dmg.velocity_y -= dmg.gravity * time.delta_secs();
 
         if transform.translation.y < dmg.start_y {
             transform.translation.y = dmg.start_y;
@@ -279,16 +283,16 @@ pub fn damage_number_update(
             for box_entity in target_box_query.iter() { commands.entity(box_entity).despawn(); }
             
             if enemy_state.hp <= 0 {
-                for (e_entity, _, e_transform, handle) in enemy_query.iter_mut() {
+                for (e_entity, sprite, e_transform) in enemy_query.iter_mut() {
                     commands.entity(e_entity).insert(Vaporizing {
                         scan_line: 0.0,
-                        image_handle: handle.clone(),
+                        image_handle: sprite.image.clone(),
                         initial_y: e_transform.translation.y,
                     });
                 }
-                combat_state.mn_fight = 0; 
+                combat_state.mn_fight = MainFightState::Menu; 
             } else {
-                combat_state.mn_fight = 1; 
+                combat_state.mn_fight = MainFightState::EnemyDialog; 
                 combat_state.bubble_timer.reset(); 
                 menu_state.menu_layer = MENU_LAYER_TOP;
             }
@@ -296,6 +300,7 @@ pub fn damage_number_update(
     }
 }
 
+// 敵HPバー
 pub fn enemy_hp_bar_update(
     mut commands: Commands,
     time: Res<Time>,

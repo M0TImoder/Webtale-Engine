@@ -4,19 +4,20 @@ use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
 
+// ソウル位置同期
 pub fn soul_position_sync(
     combat_state: Res<CombatState>,
     menu_state: Res<MenuState>,
     mut soul_query: Query<&mut Transform, With<Soul>>,
 ) {
-    if (combat_state.mn_fight != 0 && combat_state.mn_fight != 2) || combat_state.my_fight != 0 { 
+    if (combat_state.mn_fight != MainFightState::Menu && combat_state.mn_fight != MainFightState::EnemyAttack) || combat_state.my_fight != MessageFightState::None { 
         if let Ok(mut t) = soul_query.get_single_mut() {
             t.translation = gml_to_bevy(-200.0, 0.0); 
         }
         return; 
     }
     
-    if combat_state.mn_fight == 2 {
+    if combat_state.mn_fight == MainFightState::EnemyAttack {
         return;
     }
 
@@ -59,6 +60,7 @@ pub fn soul_position_sync(
     }
 }
 
+// ソウル移動
 pub fn soul_combat_movement(
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
@@ -71,7 +73,7 @@ pub fn soul_combat_movement(
     editor_state: Option<Res<EditorState>>,
 ) {
     if let Ok(editor_entity) = editor_query.get_single() {
-        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+        if egui_contexts.ctx_for_entity_mut(editor_entity).wants_keyboard_input() {
             return;
         }
     }
@@ -82,13 +84,13 @@ pub fn soul_combat_movement(
         }
     }
 
-    if combat_state.mn_fight != 2 { return; }
+    if combat_state.mn_fight != MainFightState::EnemyAttack { return; }
 
     let mut transform = query.single_mut();
     
     let speed = player_state.speed;
     
-    let delta = speed * time.delta_seconds();
+    let delta = speed * time.delta_secs();
     let mut move_vec = Vec3::ZERO;
 
     if input.pressed(KeyCode::ArrowUp)    || input.pressed(KeyCode::KeyW) { move_vec.y += 1.0; }

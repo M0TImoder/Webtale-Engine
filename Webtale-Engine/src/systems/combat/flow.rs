@@ -12,6 +12,7 @@ use crate::python_scripts;
 use crate::resources::*;
 use crate::systems::phase;
 
+// 戦闘フロー
 pub fn battle_flow_control(
     mut commands: Commands,
     mut enemy_state: ResMut<EnemyState>,
@@ -30,12 +31,12 @@ pub fn battle_flow_control(
     editor_query: Query<Entity, With<EditorWindow>>,
 ){
     if let Ok(editor_entity) = editor_query.get_single() {
-        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
+        if egui_contexts.ctx_for_entity_mut(editor_entity).wants_keyboard_input() {
             return;
         }
     }
 
-    if combat_state.mn_fight == 1 {
+    if combat_state.mn_fight == MainFightState::EnemyDialog {
         if bubbles.is_empty() {
             combat_state.turn_count += 1;
             combat_state.phase_turn += 1;
@@ -58,8 +59,8 @@ pub fn battle_flow_control(
             };
             commands.spawn((
                 SpriteBundle {
-                    texture: asset_server.load(bubble_texture), 
                     sprite: Sprite { 
+                        image: asset_server.load(bubble_texture),
                         color: Color::WHITE, 
                         custom_size: Some(Vec2::new(100.0, 80.0)), 
                         anchor: Anchor::TopLeft, 
@@ -81,12 +82,11 @@ pub fn battle_flow_control(
                 enemy_state.bubble_messages[idx].clone()
             };
             commands.spawn((
-                Text2dBundle {
-                    text: Text::from_section("", TextStyle { font: game_fonts.dialog.clone(), font_size: 24.0, color: Color::BLACK }),
-                    text_anchor: Anchor::TopLeft,
-                    transform: Transform::from_translation(gml_to_bevy(bubble_x + 15.0, bubble_y + 15.0) + Vec3::new(0.0, 0.0, Z_BUBBLE_TEXT)),
-                    ..default()
-                },
+                Text2d::new(""),
+                TextFont { font: game_fonts.dialog.clone(), font_size: 24.0 * TEXT_SCALE, ..default() },
+                TextColor(Color::BLACK),
+                Anchor::TopLeft,
+                Transform::from_translation(gml_to_bevy(bubble_x + 15.0, bubble_y + 15.0) + Vec3::new(0.0, 0.0, Z_BUBBLE_TEXT)),
                 Typewriter { full_text: msg, visible_chars: 0, timer: Timer::from_seconds(0.05, TimerMode::Repeating), finished: false },
                 SpeechBubble, 
                 Cleanup,
@@ -103,7 +103,7 @@ pub fn battle_flow_control(
         if is_finished && input.just_pressed(KeyCode::KeyZ) {
             for entity in bubbles.iter() { commands.entity(entity).despawn_recursive(); }
             
-            combat_state.mn_fight = 2; 
+            combat_state.mn_fight = MainFightState::EnemyAttack; 
             combat_state.turn_timer = -1.0; 
             
             box_res.target = Rect::new(217.0, 125.0, 417.0, 385.0);
@@ -117,6 +117,7 @@ pub fn battle_flow_control(
     }
 }
 
+// 弾幕ターン管理
 pub fn combat_turn_manager(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -129,7 +130,7 @@ pub fn combat_turn_manager(
     bullet_query: Query<Entity, With<PythonBullet>>,
     mut scripts: ResMut<DanmakuScripts>,
 ) {
-    if combat_state.mn_fight == 2 {
+    if combat_state.mn_fight == MainFightState::EnemyAttack {
         if combat_state.turn_timer < 0.0 {
             combat_state.turn_timer = 5.0; 
             
@@ -190,7 +191,7 @@ pub fn combat_turn_manager(
                 let api_module = match cached_api {
                     Some(module) => module,
                     None => {
-                        let api_content = match api_content {
+                        let api_content = match api_content.as_deref() {
                             Some(content) => content,
                             None => return,
                         };
@@ -225,7 +226,7 @@ pub fn combat_turn_manager(
                 let module = match cached_module {
                     Some(module) => module,
                     None => {
-                        let script_content = match script_content {
+                        let script_content = match script_content.as_deref() {
                             Some(content) => content,
                             None => return,
                         };
@@ -346,7 +347,7 @@ pub fn combat_turn_manager(
 
                 commands.spawn((
                     SpriteBundle {
-                        texture: asset_server.load(texture_path),
+                        sprite: Sprite { image: asset_server.load(texture_path), ..default() },
                         transform: Transform::from_xyz(spawn_x, spawn_y, 30.0).with_scale(Vec3::splat(1.0)),
                         ..default()
                     },
@@ -361,19 +362,19 @@ pub fn combat_turn_manager(
             });
         }
 
-        combat_state.turn_timer -= time.delta_seconds();
+        combat_state.turn_timer -= time.delta_secs();
 
         if combat_state.turn_timer <= 0.0 {
             for entity in bullet_query.iter() {
                 commands.entity(entity).despawn();
             }
             
-            combat_state.mn_fight = 3;
+            combat_state.mn_fight = MainFightState::TurnCleanup;
             combat_state.turn_timer = -1.0;
         }
-    } else if combat_state.mn_fight == 3 {
-        combat_state.mn_fight = 0;
-        combat_state.my_fight = 0;
+    } else if combat_state.mn_fight == MainFightState::TurnCleanup {
+        combat_state.mn_fight = MainFightState::Menu;
+        combat_state.my_fight = MessageFightState::None;
         menu_state.menu_layer = 0;
         menu_state.dialog_text = enemy_state.dialog_text.clone(); 
         

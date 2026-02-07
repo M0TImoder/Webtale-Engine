@@ -49,3 +49,6 @@ def setNextPhase(name):
 
 def getState():
     return _state
+
+def getInitialPhase():
+    return "phase1"

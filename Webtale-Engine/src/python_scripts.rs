@@ -1,65 +1,81 @@
-const DEFAULT_ITEM: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/projects/default/properties/item.py"));
-const DEFAULT_PLAYER_STATUS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/projects/default/properties/playerStatus.py"));
-const DEFAULT_ENEMY_STATUS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/projects/default/properties/enemyStatus.py"));
-const DEFAULT_PHASE_API: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/projects/default/phases/phase_api.py"));
-const DEFAULT_PHASE1: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/projects/default/phases/phase1.py"));
-const DEFAULT_PHASE_EXAMPLE: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/projects/default/phases/PhaseExample.py"));
-const DEFAULT_DANMAKU_API: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/projects/default/danmaku/api.py"));
-const DEFAULT_DANMAKU_FROG_JUMP: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/projects/default/danmaku/frogJump.py"));
+// Pythonスクリプト読み込み
+use std::fs;
+use std::path::{Path, PathBuf};
 
-pub fn get_item_script(project: &str) -> Option<&'static str> {
-    match project {
-        "default" => Some(DEFAULT_ITEM),
-        _ => None,
-    }
+// プロジェクトルートパス
+fn project_root(project: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("projects")
+        .join(project)
 }
 
-pub fn get_player_status_script(project: &str) -> Option<&'static str> {
-    match project {
-        "default" => Some(DEFAULT_PLAYER_STATUS),
-        _ => None,
-    }
+// スクリプト読み込み
+fn read_script(path: PathBuf) -> Option<String> {
+    fs::read_to_string(path).ok()
 }
 
-pub fn get_enemy_status_script(project: &str) -> Option<&'static str> {
-    match project {
-        "default" => Some(DEFAULT_ENEMY_STATUS),
-        _ => None,
-    }
+// アイテムスクリプト
+pub fn get_item_script(project: &str) -> Option<String> {
+    read_script(project_root(project).join("properties").join("item.py"))
 }
 
-pub fn get_phase_api_script(project: &str) -> Option<&'static str> {
-    match project {
-        "default" => Some(DEFAULT_PHASE_API),
-        _ => None,
-    }
+// プレイヤーステータススクリプト
+pub fn get_player_status_script(project: &str) -> Option<String> {
+    read_script(project_root(project).join("properties").join("playerStatus.py"))
 }
 
-pub fn get_phase_script(project: &str, phase_name: &str) -> Option<&'static str> {
-    match (project, phase_name) {
-        ("default", "phase1") => Some(DEFAULT_PHASE1),
-        ("default", "PhaseExample") => Some(DEFAULT_PHASE_EXAMPLE),
-        _ => None,
-    }
+// 敵ステータススクリプト
+pub fn get_enemy_status_script(project: &str) -> Option<String> {
+    read_script(project_root(project).join("properties").join("enemyStatus.py"))
 }
 
+// フェーズAPIスクリプト
+pub fn get_phase_api_script(project: &str) -> Option<String> {
+    read_script(project_root(project).join("phases").join("phase_api.py"))
+}
+
+// フェーズスクリプト
+pub fn get_phase_script(project: &str, phase_name: &str) -> Option<String> {
+    if phase_name.is_empty() {
+        return None;
+    }
+    read_script(project_root(project).join("phases").join(format!("{}.py", phase_name)))
+}
+
+// フェーズ一覧
 pub fn list_phase_names(project: &str) -> Vec<String> {
-    match project {
-        "default" => vec!["phase1".to_string(), "PhaseExample".to_string()],
-        _ => vec![],
+    let phases_dir = project_root(project).join("phases");
+    let entries = match fs::read_dir(phases_dir) {
+        Ok(entries) => entries,
+        Err(_) => return vec![],
+    };
+    let mut names = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("py") {
+            continue;
+        }
+        let stem = match path.file_stem().and_then(|stem| stem.to_str()) {
+            Some(stem) => stem,
+            None => continue,
+        };
+        if stem == "phase_api" {
+            continue;
+        }
+        names.push(stem.to_string());
     }
+    names
 }
 
-pub fn get_danmaku_api_script(project: &str) -> Option<&'static str> {
-    match project {
-        "default" => Some(DEFAULT_DANMAKU_API),
-        _ => None,
-    }
+// 弾幕APIスクリプト
+pub fn get_danmaku_api_script(project: &str) -> Option<String> {
+    read_script(project_root(project).join("danmaku").join("api.py"))
 }
 
-pub fn get_danmaku_script(project: &str, script_name: &str) -> Option<&'static str> {
-    match (project, script_name) {
-        ("default", "frogJump") => Some(DEFAULT_DANMAKU_FROG_JUMP),
-        _ => None,
+// 弾幕スクリプト
+pub fn get_danmaku_script(project: &str, script_name: &str) -> Option<String> {
+    if script_name.is_empty() {
+        return None;
     }
+    read_script(project_root(project).join("danmaku").join(format!("{}.py", script_name)))
 }

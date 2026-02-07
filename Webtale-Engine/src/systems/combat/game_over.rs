@@ -3,13 +3,14 @@ use rand::Rng;
 use std::f32::consts::PI;
 use crate::components::*;
 
+// ソウル破壊演出
 pub fn heart_defeated_update(
     mut commands: Commands,
     time: Res<Time>,
     asset_server: Res<AssetServer>,
-    mut query: Query<(Entity, &mut HeartDefeated, &mut Transform, &mut Handle<Image>)>,
+    mut query: Query<(Entity, &mut HeartDefeated, &mut Transform, &mut Sprite)>,
 ) {
-    for (entity, mut defeated, mut transform, mut texture) in query.iter_mut() {
+    for (entity, mut defeated, mut transform, mut sprite) in query.iter_mut() {
         defeated.timer.tick(time.delta());
 
         match defeated.state {
@@ -18,7 +19,7 @@ pub fn heart_defeated_update(
                     defeated.state = HeartDefeatedState::Cracked;
                     defeated.timer = Timer::from_seconds(1.0, TimerMode::Once); 
                     
-                    *texture = asset_server.load("texture/heart/spr_heartbreak.png");
+                    sprite.image = asset_server.load("texture/heart/spr_heartbreak.png");
                     transform.translation.x -= 2.0; 
                 }
             },
@@ -46,12 +47,12 @@ pub fn heart_defeated_update(
                         let shard_index = rng.gen_range(0..4);
                         let texture_path = format!("texture/heart/spr_heartshards_{}.png", shard_index);
 
-                        commands.spawn((
-                            SpriteBundle {
-                                texture: asset_server.load(texture_path),
-                                transform: Transform::from_translation(base_pos + *offset + Vec3::new(0.0, 0.0, 0.0)).with_translation(Vec3::new(base_pos.x + offset.x, base_pos.y + offset.y, 600.0)), 
-                                ..default()
-                            },
+                    commands.spawn((
+                        SpriteBundle {
+                            sprite: Sprite { image: asset_server.load(texture_path), ..default() },
+                            transform: Transform::from_translation(base_pos + *offset + Vec3::new(0.0, 0.0, 0.0)).with_translation(Vec3::new(base_pos.x + offset.x, base_pos.y + offset.y, 600.0)), 
+                            ..default()
+                        },
                             HeartShard {
                                 velocity: Vec3::new(vx, vy, 0.0),
                                 gravity: 0.2 * 30.0 * 30.0, 
@@ -75,6 +76,7 @@ pub fn heart_defeated_update(
     }
 }
 
+// ゲームオーバー演出
 pub fn game_over_sequence_update(
     mut commands: Commands,
     time: Res<Time>,
@@ -93,8 +95,8 @@ pub fn game_over_sequence_update(
 
                     commands.spawn((
                         SpriteBundle {
-                            texture: asset_server.load("texture/background/spr_gameoverbg.png"),
                             sprite: Sprite {
+                                image: asset_server.load("texture/background/spr_gameoverbg.png"),
                                 color: Color::rgba(1.0, 1.0, 1.0, 0.0),
                                 ..default()
                             },
@@ -109,13 +111,13 @@ pub fn game_over_sequence_update(
             GameOverSequenceState::FadeIn => {
                 let alpha = sequence.timer.fraction();
                 for mut sprite in logo_query.iter_mut() {
-                    sprite.color.set_a(alpha);
+                    sprite.color.set_alpha(alpha);
                 }
 
                 if sequence.timer.finished() {
                     sequence.state = GameOverSequenceState::Finished;
                     for mut sprite in logo_query.iter_mut() {
-                        sprite.color.set_a(1.0);
+                        sprite.color.set_alpha(1.0);
                     }
                 }
             },
@@ -126,12 +128,13 @@ pub fn game_over_sequence_update(
     }
 }
 
+// ハート破片更新
 pub fn heart_shard_update(
     mut commands: Commands,
     time: Res<Time>,
     mut query: Query<(Entity, &mut Transform, &mut HeartShard)>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     for (entity, mut transform, mut shard) in query.iter_mut() {
         shard.velocity.y -= shard.gravity * dt;
         transform.translation += shard.velocity * dt;

@@ -6,9 +6,64 @@ use rustpython_vm::import::import_codeobj;
 use rustpython_vm::PyObjectRef;
 use crate::constants::*;
 use crate::python_scripts;
-use crate::resources::{EnemyState, CombatState, MenuState, PythonRuntime};
+use crate::python_utils::{read_option_string, read_option_vec_f32, read_option_vec_string};
+use crate::resources::{EnemyState, CombatState, MenuState, PythonRuntime, MainFightState, MessageFightState};
 
-pub fn resolve_initial_phase(project_name: &str, requested: &str) -> String {
+// 初期フェーズ取得
+fn resolve_initial_phase_from_api(project_name: &str, python_runtime: &PythonRuntime) -> Option<String> {
+    let api_content = match python_scripts::get_phase_api_script(project_name) {
+        Some(content) => content,
+        None => return None,
+    };
+    let mut initial_phase: Option<String> = None;
+    python_runtime.interpreter.enter(|vm| {
+        let code_obj = match vm.compile(&api_content, Mode::Exec, "phase_api.py".to_string()) {
+            Ok(code_obj) => code_obj,
+            Err(err) => {
+                println!("Warning: python compile phase_api.py {:?}", err);
+                return;
+            }
+        };
+        let api_module = match import_codeobj(vm, "phase_api", code_obj, true) {
+            Ok(module) => module,
+            Err(err) => {
+                vm.print_exception(err.clone());
+                return;
+            }
+        };
+        let get_initial = match api_module.get_attr("getInitialPhase", vm) {
+            Ok(func) => func,
+            Err(err) => {
+                vm.print_exception(err.clone());
+                println!("Warning: phase api missing getInitialPhase");
+                return;
+            }
+        };
+        match vm.invoke(&get_initial, ()) {
+            Ok(result) => match result.try_into_value::<String>(vm) {
+                Ok(name) => {
+                    if name.is_empty() {
+                        println!("Warning: phase api getInitialPhase empty");
+                    } else {
+                        initial_phase = Some(name);
+                    }
+                }
+                Err(err) => {
+                    vm.print_exception(err.clone());
+                    println!("Warning: phase api getInitialPhase {:?}", err);
+                }
+            },
+            Err(err) => {
+                vm.print_exception(err.clone());
+                println!("Warning: phase api getInitialPhase {:?}", err);
+            }
+        }
+    });
+    initial_phase
+}
+
+// 初期フェーズ決定
+pub fn resolve_initial_phase(project_name: &str, requested: &str, python_runtime: &PythonRuntime) -> String {
     if !requested.is_empty() {
         if python_scripts::get_phase_script(project_name, requested).is_some() {
             return requested.to_string();
@@ -16,8 +71,11 @@ pub fn resolve_initial_phase(project_name: &str, requested: &str) -> String {
         println!("Warning: phase script missing projects/{}/phases/{}.py", project_name, requested);
     }
 
-    if python_scripts::get_phase_script(project_name, "phase1").is_some() {
-        return "phase1".to_string();
+    if let Some(initial_phase) = resolve_initial_phase_from_api(project_name, python_runtime) {
+        if python_scripts::get_phase_script(project_name, &initial_phase).is_some() {
+            return initial_phase;
+        }
+        println!("Warning: phase script missing projects/{}/phases/{}.py", project_name, initial_phase);
     }
 
     let mut phase_names = python_scripts::list_phase_names(project_name);
@@ -25,6 +83,7 @@ pub fn resolve_initial_phase(project_name: &str, requested: &str) -> String {
     phase_names.first().cloned().unwrap_or_default()
 }
 
+// 吹き出しテクスチャ解決
 fn resolve_bubble_texture_name(name: &str) -> String {
     match name {
         "blconabove" => "texture/blcon/spr_blconabove.png",
@@ -45,6 +104,7 @@ fn resolve_bubble_texture_name(name: &str) -> String {
     .to_string()
 }
 
+// フェーズ更新
 pub fn apply_phase_update(enemy_state: &mut EnemyState, combat_state: &mut CombatState, menu_state: &mut MenuState, project_name: &str, trigger: &str, python_runtime: &PythonRuntime) -> Option<String> {
     if combat_state.phase_name.is_empty() {
         return None;
@@ -87,7 +147,7 @@ pub fn apply_phase_update(enemy_state: &mut EnemyState, combat_state: &mut Comba
             }
         };
 
-        let api_module = match run_module(api_content, "phase_api.py", "phase_api") {
+        let api_module = match run_module(&api_content, "phase_api.py", "phase_api") {
             Some(module) => module,
             None => return,
         };
@@ -147,7 +207,7 @@ pub fn apply_phase_update(enemy_state: &mut EnemyState, combat_state: &mut Comba
             }
         }
 
-        let phase_module = match run_module(script_content, &format!("{}.py", phase_name), &phase_name) {
+        let phase_module = match run_module(&script_content, &format!("{}.py", phase_name), &phase_name) {
             Some(module) => module,
             None => return,
         };
@@ -169,90 +229,33 @@ pub fn apply_phase_update(enemy_state: &mut EnemyState, combat_state: &mut Comba
             }
         };
 
-        let read_option_string = |dict: &PyDictRef, key: &str, label: &str| -> Option<String> {
-            match dict.get_item_opt(key, vm) {
-                Ok(Some(value)) => match value.try_into_value::<Option<String>>(vm) {
-                    Ok(result) => result,
-                    Err(err) => {
-                        vm.print_exception(err.clone());
-                        println!("Warning: {} {} {:?}", label, key, err);
-                        None
-                    }
-                },
-                Ok(None) => None,
-                Err(err) => {
-                    vm.print_exception(err.clone());
-                    println!("Warning: {} {} {:?}", label, key, err);
-                    None
-                }
-            }
-        };
-
-        let read_option_vec_string = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<String>> {
-            match dict.get_item_opt(key, vm) {
-                Ok(Some(value)) => match value.try_into_value::<Option<Vec<String>>>(vm) {
-                    Ok(result) => result,
-                    Err(err) => {
-                        vm.print_exception(err.clone());
-                        println!("Warning: {} {} {:?}", label, key, err);
-                        None
-                    }
-                },
-                Ok(None) => None,
-                Err(err) => {
-                    vm.print_exception(err.clone());
-                    println!("Warning: {} {} {:?}", label, key, err);
-                    None
-                }
-            }
-        };
-
-        let read_option_vec_f32 = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<f32>> {
-            match dict.get_item_opt(key, vm) {
-                Ok(Some(value)) => match value.try_into_value::<Option<Vec<f32>>>(vm) {
-                    Ok(result) => result,
-                    Err(err) => {
-                        vm.print_exception(err.clone());
-                        println!("Warning: {} {} {:?}", label, key, err);
-                        None
-                    }
-                },
-                Ok(None) => None,
-                Err(err) => {
-                    vm.print_exception(err.clone());
-                    println!("Warning: {} {} {:?}", label, key, err);
-                    None
-                }
-            }
-        };
-
         let mut apply_state = |state_dict: &PyDictRef| {
-            if let Some(dialog_text) = read_option_string(state_dict, "dialogText", "phase") {
+            if let Some(dialog_text) = read_option_string(vm, state_dict, "dialogText", "phase", false) {
                 enemy_state.dialog_text = dialog_text.clone();
-                if combat_state.mn_fight == 0 && combat_state.my_fight == 0 && menu_state.menu_layer == MENU_LAYER_TOP {
+                if combat_state.mn_fight == MainFightState::Menu && combat_state.my_fight == MessageFightState::None && menu_state.menu_layer == MENU_LAYER_TOP {
                     menu_state.dialog_text = dialog_text;
                 }
             }
 
-            if let Some(attacks) = read_option_vec_string(state_dict, "attackPatterns", "phase") {
+            if let Some(attacks) = read_option_vec_string(vm, state_dict, "attackPatterns", "phase", false) {
                 enemy_state.attacks = attacks;
             }
 
-            if let Some(messages) = read_option_vec_string(state_dict, "bubbleMessages", "phase") {
+            if let Some(messages) = read_option_vec_string(vm, state_dict, "bubbleMessages", "phase", false) {
                 enemy_state.bubble_messages = messages;
             }
 
-            if let Some(message) = read_option_string(state_dict, "bubbleMessage", "phase") {
+            if let Some(message) = read_option_string(vm, state_dict, "bubbleMessage", "phase", false) {
                 if !message.is_empty() {
                     enemy_state.bubble_message_override = Some(message);
                 }
             }
 
-            if let Some(texture) = read_option_string(state_dict, "bubbleTexture", "phase") {
+            if let Some(texture) = read_option_string(vm, state_dict, "bubbleTexture", "phase", false) {
                 enemy_state.bubble_texture = resolve_bubble_texture_name(&texture);
             }
 
-            if let Some(pos) = read_option_vec_f32(state_dict, "bubblePosition", "phase") {
+            if let Some(pos) = read_option_vec_f32(vm, state_dict, "bubblePosition", "phase", false) {
                 if pos.len() == 2 {
                     enemy_state.bubble_pos_override = Some(Vec2::new(pos[0], pos[1]));
                 } else {
@@ -260,7 +263,7 @@ pub fn apply_phase_update(enemy_state: &mut EnemyState, combat_state: &mut Comba
                 }
             }
 
-            next_phase = read_option_string(state_dict, "nextPhase", "phase");
+            next_phase = read_option_string(vm, state_dict, "nextPhase", "phase", false);
         };
 
         if let Ok(dict) = update_result.try_into_value::<PyDictRef>(vm) {
