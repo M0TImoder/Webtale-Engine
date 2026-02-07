@@ -9,6 +9,7 @@ class Bullet:
         self.vy = 0.0
         self.texture = None
         self.shouldDelete = False
+        self.damage = 0
         
         self.state = "start"
         self.timer = 0.0
@@ -52,4 +53,3 @@ class Bullet:
         rad = math.atan2(dy, dx)
         self.vx = speed * math.cos(rad)
         self.vy = speed * math.sin(rad)
-        

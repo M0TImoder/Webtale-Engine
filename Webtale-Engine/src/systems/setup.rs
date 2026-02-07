@@ -1,18 +1,24 @@
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
-use std::fs;
+use rustpython_vm::builtins::PyDictRef;
+use rustpython_vm::compiler::Mode;
+use rustpython_vm::scope::Scope;
+use std::collections::HashMap;
 use crate::components::*;
-use crate::resources::*;
 use crate::constants::*;
+use crate::python_scripts;
+use crate::python_utils::{read_option_f32, read_option_i32, read_option_string, read_option_vec_string};
+use crate::resources::*;
+use crate::systems::phase;
 
+// 初期セットアップ
 pub fn setup(
     mut commands: Commands, 
-    assetServer: Res<AssetServer>,
-    mut windowQuery: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+    asset_server: Res<AssetServer>,
+    python_runtime: NonSend<PythonRuntime>,
+    mut window_query: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
 ) {
-    if let Ok(mut window) = windowQuery.get_single_mut() {
+    if let Ok(mut window) = window_query.get_single_mut() {
         window.visible = false;
     }
 
@@ -21,236 +27,551 @@ pub fn setup(
         MainCamera,
     ));
 
-    let fontMain = assetServer.load("font/Mars_Needs_Cunnilingus.ttf");
-    let fontDialog = assetServer.load("font/8bitOperatorPlus-Bold.ttf");
-    let fontHpLabel = assetServer.load("font/8-BIT_WO.ttf");
-    let fontDamage = assetServer.load("font/hachicro.TTF");
+    let font_main = asset_server.load("font/Mars_Needs_Cunnilingus.ttf");
+    let font_dialog = asset_server.load("font/8bitOperatorPlus-Bold.ttf");
+    let font_hp_label = asset_server.load("font/8-BIT_WO.ttf");
+    let font_damage = asset_server.load("font/hachicro.TTF");
 
-    let gameFonts = GameFonts {
-        main: fontMain.clone(),
-        dialog: fontDialog.clone(),
-        hpLabel: fontHpLabel.clone(),
-        damage: fontDamage.clone(), 
+    let game_fonts = GameFonts {
+        main: font_main.clone(),
+        dialog: font_dialog.clone(),
+        hp_label: font_hp_label.clone(),
+        damage: font_damage.clone(), 
     };
 
-    spawnGameObjects(&mut commands, &assetServer, &gameFonts);
+    spawn_game_objects(&mut commands, &asset_server, &game_fonts, &python_runtime);
 
-    commands.insert_resource(gameFonts);
+    commands.insert_resource(game_fonts);
 }
 
-pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, gameFonts: &GameFonts) {
-    let mut gameState = GameState {
-        hp: 20.0,
-        maxHp: 20.0,
+// ゲームオブジェクト生成
+pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, game_fonts: &GameFonts, python_runtime: &PythonRuntime) {
+    let mut player_state = default_player_state();
+    let mut enemy_state = default_enemy_state();
+    let mut menu_state = default_menu_state();
+    let mut combat_state = default_combat_state();
+
+    let project_name = PROJECT_NAME;
+    let mut item_dictionary = ItemDictionary::default();
+    let mut phase_script_name = String::new();
+
+    load_python_game_data(
+        python_runtime,
+        project_name,
+        &mut player_state,
+        &mut enemy_state,
+        &mut item_dictionary,
+        &mut phase_script_name,
+    );
+
+    validate_loaded_states(&mut player_state, &mut enemy_state);
+
+    apply_initial_phase(
+        project_name,
+        &phase_script_name,
+        python_runtime,
+        &mut enemy_state,
+        &mut combat_state,
+        &mut menu_state,
+    );
+
+    if !enemy_state.dialog_text.is_empty() {
+        menu_state.dialog_text = enemy_state.dialog_text.clone();
+    }
+
+    spawn_enemy_entities(commands, asset_server, &enemy_state);
+    spawn_soul(commands, asset_server);
+    spawn_menu_buttons(commands, asset_server);
+    spawn_battle_box_visuals(commands);
+    spawn_ui(commands, game_fonts, &player_state, &menu_state);
+
+    commands.insert_resource(item_dictionary);
+    commands.insert_resource(player_state);
+    commands.insert_resource(enemy_state);
+    commands.insert_resource(menu_state);
+    commands.insert_resource(combat_state);
+}
+
+// プレイヤーデフォルト
+fn default_player_state() -> PlayerState {
+    PlayerState {
+        hp: 0.0,
+        max_hp: 0.0,
         lv: 1,
-        name: "CHARA".to_string(),
-        
-        speed: 150.0,
-        attack: 20.0,
-        invincibilityDuration: 1.0,
-
-        enemyHp: 30,
-        enemyMaxHp: 30,
-        enemyDef: 0,
-        enemyAttacks: vec![],
-
-        mnFight: 0, 
-        myFight: 0,
-        menuLayer: MENU_LAYER_TOP,
-        menuCoords: vec![0; 11],
-
+        name: String::new(),
+        speed: 0.0,
+        attack: 0.0,
+        defense: 0.0,
+        invincibility_duration: 0.0,
+        invincibility_timer: 0.0,
         inventory: vec![],
-        itemPage: 0,
-        
-        dialogText: "* Froggit hops close!".to_string(),
-        
-        bubbleTimer: Timer::from_seconds(3.0, TimerMode::Once),
-        damageDisplayTimer: Timer::from_seconds(1.0, TimerMode::Once),
-        turnTimer: -1.0,
-        invincibilityTimer: 0.0,
-    };
+        equipped_items: vec![],
+    }
+}
 
-    let projectName = PROJECT_NAME;
+// 敵デフォルト
+fn default_enemy_state() -> EnemyState {
+    EnemyState {
+        hp: 0,
+        max_hp: 0,
+        atk: 0,
+        def: 0,
+        name: String::new(),
+        dialog_text: String::new(),
+        act_commands: vec![],
+        act_texts: HashMap::new(),
+        bubble_messages: vec![],
+        body_texture: String::new(),
+        head_texture: String::new(),
+        head_yoffset: 0.0,
+        base_x: 0.0,
+        base_y: 0.0,
+        scale: 1.0,
+        attacks: vec![],
+        bubble_texture: "texture/blcon/spr_blconsm.png".to_string(),
+        bubble_message_override: None,
+        bubble_pos_override: None,
+    }
+}
 
-    let mut itemDictionary = ItemDictionary::default();
-    let itemPath = format!("projects/{}/properties/item.py", projectName);
+// メニューデフォルト
+fn default_menu_state() -> MenuState {
+    MenuState {
+        menu_layer: MENU_LAYER_TOP,
+        menu_coords: vec![0; 11],
+        item_page: 0,
+        dialog_text: String::new(),
+    }
+}
 
-    if let Ok(script) = fs::read_to_string(&itemPath) {
-        Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "item.py", "item") {
-                if let Ok(func) = module.getattr("getItemData") {
-                    if let Ok(result) = func.call0() {
-                        if let Ok(dict) = result.downcast::<PyDict>() {
-                            for (key, value) in dict.iter() {
-                                let itemName: String = key.extract().unwrap_or_default();
-                                if let Ok(data) = value.downcast::<PyDict>() {
-                                    let heal: i32 = data.get_item("heal").ok().flatten().and_then(|v| v.extract().ok()).unwrap_or(0);
-                                    let text: String = data.get_item("text").ok().flatten().and_then(|v| v.extract().ok()).unwrap_or_default();
-                                    
-                                    itemDictionary.0.insert(itemName, ItemInfo { healAmount: heal, text });
+// 戦闘デフォルト
+fn default_combat_state() -> CombatState {
+    CombatState {
+        mn_fight: MainFightState::Menu,
+        my_fight: MessageFightState::None,
+        phase_name: String::new(),
+        phase_turn: 0,
+        turn_count: 0,
+        turn_timer: -1.0,
+        bubble_timer: Timer::from_seconds(3.0, TimerMode::Once),
+        damage_display_timer: Timer::from_seconds(1.0, TimerMode::Once),
+        last_player_action: String::new(),
+        last_act_command: None,
+    }
+}
+
+// Pythonデータ読み込み
+fn load_python_game_data(
+    python_runtime: &PythonRuntime,
+    project_name: &str,
+    player_state: &mut PlayerState,
+    enemy_state: &mut EnemyState,
+    item_dictionary: &mut ItemDictionary,
+    phase_script_name: &mut String,
+) {
+    python_runtime.interpreter.enter(|vm| {
+        let run_script = |code: &str, filename: &str| -> Option<Scope> {
+            let scope = vm.new_scope_with_builtins();
+            let code_obj = match vm.compile(code, Mode::Exec, filename.to_string()) {
+                Ok(code_obj) => code_obj,
+                Err(err) => {
+                    println!("Warning: python compile {} {:?}", filename, err);
+                    return None;
+                }
+            };
+            if let Err(err) = vm.run_code_obj(code_obj, scope.clone()) {
+                vm.print_exception(err.clone());
+                return None;
+            }
+            Some(scope)
+        };
+
+        let item_script = match python_scripts::get_item_script(project_name) {
+            Some(script) => script,
+            None => {
+                println!("Warning: Could not load projects/{}/properties/item.py", project_name);
+                String::new()
+            }
+        };
+        if !item_script.is_empty() {
+            if let Some(scope) = run_script(&item_script, "item.py") {
+                match scope.globals.get_item_opt("getItemData", vm) {
+                    Ok(Some(func)) => match vm.invoke(&func, ()) {
+                        Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
+                            Ok(dict) => {
+                                for (key, value) in &dict {
+                                    let item_name: String = match key.try_into_value(vm) {
+                                        Ok(name) => name,
+                                        Err(err) => {
+                                            vm.print_exception(err.clone());
+                                            println!("Warning: itemData key {:?}", err);
+                                            continue;
+                                        }
+                                    };
+                                    let data: PyDictRef = match value.try_into_value(vm) {
+                                        Ok(data) => data,
+                                        Err(err) => {
+                                            vm.print_exception(err.clone());
+                                            println!("Warning: itemData value {:?}", err);
+                                            continue;
+                                        }
+                                    };
+                                    let heal = read_option_i32(vm, &data, "heal", "itemData", true).unwrap_or(0);
+                                    let attack = read_option_i32(vm, &data, "attack", "itemData", true).unwrap_or(0);
+                                    let defense = read_option_i32(vm, &data, "defense", "itemData", true).unwrap_or(0);
+                                    let text = read_option_string(vm, &data, "text", "itemData", true).unwrap_or_default();
+
+                                    item_dictionary.0.insert(item_name, ItemInfo { heal_amount: heal, attack, defense, text });
                                 }
                             }
+                            Err(err) => {
+                                vm.print_exception(err.clone());
+                                println!("Warning: itemData result {:?}", err);
+                            }
+                        },
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: itemData call {:?}", err);
                         }
-                    }
-                }
-
-                if let Ok(func) = module.getattr("getInitialInventory") {
-                    if let Ok(result) = func.call0() {
-                        if let Ok(list) = result.downcast::<PyList>() {
-                             if let Ok(inv) = list.extract() {
-                                 gameState.inventory = inv;
-                             }
-                        }
-                    }
-                }
-            }
-        });
-    } else {
-        println!("Warning: Could not load {}", itemPath);
-    }
-
-    let playerStatusPath = format!("projects/{}/properties/playerStatus.py", projectName);
-    if let Ok(script) = fs::read_to_string(&playerStatusPath) {
-        Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "playerStatus.py", "playerStatus") {
-                if let Ok(func) = module.getattr("getPlayerStatus") {
-                    if let Ok(result) = func.call0() {
-                        if let Ok(dict) = result.downcast::<PyDict>() {
-                            if let Some(name) = dict.get_item("name").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.name = name;
-                            }
-                            if let Some(lv) = dict.get_item("lv").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.lv = lv;
-                            }
-                            if let Some(maxHp) = dict.get_item("maxHp").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.maxHp = maxHp;
-                            }
-                            if let Some(hp) = dict.get_item("hp").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.hp = hp;
-                            }
-                            if let Some(speed) = dict.get_item("speed").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.speed = speed;
-                            }
-                            if let Some(attack) = dict.get_item("attack").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.attack = attack;
-                            }
-                            if let Some(invDur) = dict.get_item("invincibilityDuration").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.invincibilityDuration = invDur;
-                            }
-                        }
+                    },
+                    Ok(None) => println!("Warning: itemData missing getItemData"),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: itemData lookup {:?}", err);
                     }
                 }
             }
-        });
-    } else {
-        println!("Warning: Could not load {}", playerStatusPath);
-    }
+        }
 
-    let enemyStatusPath = format!("projects/{}/properties/enemyStatus.py", projectName);
-    if let Ok(script) = fs::read_to_string(&enemyStatusPath) {
-        Python::with_gil(|py| {
-            if let Ok(module) = PyModule::from_code_bound(py, &script, "enemyStatus.py", "enemyStatus") {
-                if let Ok(func) = module.getattr("getEnemyStatus") {
-                    if let Ok(result) = func.call0() {
-                        if let Ok(dict) = result.downcast::<PyDict>() {
-                            if let Some(hp) = dict.get_item("enemyHp").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.enemyHp = hp;
+        let player_status_script = match python_scripts::get_player_status_script(project_name) {
+            Some(script) => script,
+            None => {
+                println!("Warning: Could not load projects/{}/properties/playerStatus.py", project_name);
+                String::new()
+            }
+        };
+        if !player_status_script.is_empty() {
+            if let Some(scope) = run_script(&player_status_script, "playerStatus.py") {
+                match scope.globals.get_item_opt("getPlayerStatus", vm) {
+                    Ok(Some(func)) => match vm.invoke(&func, ()) {
+                        Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
+                            Ok(dict) => {
+                                if let Some(name) = read_option_string(vm, &dict, "name", "playerStatus", true) {
+                                    player_state.name = name;
+                                }
+                                if let Some(lv) = read_option_i32(vm, &dict, "lv", "playerStatus", true) {
+                                    player_state.lv = lv;
+                                }
+                                if let Some(max_hp) = read_option_f32(vm, &dict, "maxHp", "playerStatus", true) {
+                                    player_state.max_hp = max_hp;
+                                }
+                                if let Some(hp) = read_option_f32(vm, &dict, "hp", "playerStatus", true) {
+                                    player_state.hp = hp;
+                                }
+                                if let Some(speed) = read_option_f32(vm, &dict, "speed", "playerStatus", true) {
+                                    player_state.speed = speed;
+                                }
+                                if let Some(attack) = read_option_f32(vm, &dict, "attack", "playerStatus", true) {
+                                    player_state.attack = attack;
+                                }
+                                if let Some(defense) = read_option_f32(vm, &dict, "defense", "playerStatus", true) {
+                                    player_state.defense = defense;
+                                }
+                                if let Some(inv_dur) = read_option_f32(vm, &dict, "invincibilityDuration", "playerStatus", true) {
+                                    player_state.invincibility_duration = inv_dur;
+                                }
+                                if let Some(inventory) = read_option_vec_string(vm, &dict, "inventory", "playerStatus", true) {
+                                    player_state.inventory = inventory;
+                                }
+                                if let Some(equipped_items) = read_option_vec_string(vm, &dict, "equippedItems", "playerStatus", true) {
+                                    player_state.equipped_items = equipped_items;
+                                }
                             }
-                            if let Some(maxHp) = dict.get_item("enemyMaxHp").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.enemyMaxHp = maxHp;
+                            Err(err) => {
+                                vm.print_exception(err.clone());
+                                println!("Warning: playerStatus result {:?}", err);
                             }
-                            if let Some(def) = dict.get_item("enemyDef").ok().flatten().and_then(|v| v.extract().ok()) {
-                                gameState.enemyDef = def;
-                            }
-                            if let Some(attacks) = dict.get_item("attackPatterns").ok().flatten().and_then(|v| v.extract::<Vec<String>>().ok()) {
-                                gameState.enemyAttacks = attacks;
-                            }
+                        },
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: playerStatus call {:?}", err);
                         }
+                    },
+                    Ok(None) => println!("Warning: playerStatus missing getPlayerStatus"),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: playerStatus lookup {:?}", err);
                     }
                 }
             }
-        });
-    } else {
-        println!("Warning: Could not load {}", enemyStatusPath);
+        }
+
+        let enemy_status_script = match python_scripts::get_enemy_status_script(project_name) {
+            Some(script) => script,
+            None => {
+                println!("Warning: Could not load projects/{}/properties/enemyStatus.py", project_name);
+                String::new()
+            }
+        };
+        if !enemy_status_script.is_empty() {
+            if let Some(scope) = run_script(&enemy_status_script, "enemyStatus.py") {
+                match scope.globals.get_item_opt("getEnemyStatus", vm) {
+                    Ok(Some(func)) => match vm.invoke(&func, ()) {
+                        Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
+                            Ok(dict) => {
+                                if let Some(hp) = read_option_i32(vm, &dict, "enemyHp", "enemyStatus", true) {
+                                    enemy_state.hp = hp;
+                                }
+                                if let Some(max_hp) = read_option_i32(vm, &dict, "enemyMaxHp", "enemyStatus", true) {
+                                    enemy_state.max_hp = max_hp;
+                                }
+                                if let Some(atk) = read_option_i32(vm, &dict, "enemyAtk", "enemyStatus", true) {
+                                    enemy_state.atk = atk;
+                                }
+                                if let Some(def) = read_option_i32(vm, &dict, "enemyDef", "enemyStatus", true) {
+                                    enemy_state.def = def;
+                                }
+                                if let Some(name) = read_option_string(vm, &dict, "enemyName", "enemyStatus", true) {
+                                    enemy_state.name = name;
+                                }
+                                if let Some(dialog_text) = read_option_string(vm, &dict, "dialogText", "enemyStatus", true) {
+                                    enemy_state.dialog_text = dialog_text;
+                                }
+                                if let Some(phase_script) = read_option_string(vm, &dict, "phaseScript", "enemyStatus", true) {
+                                    *phase_script_name = phase_script;
+                                }
+                                if let Some(attacks) = read_option_vec_string(vm, &dict, "attackPatterns", "enemyStatus", true) {
+                                    enemy_state.attacks = attacks;
+                                }
+                                if let Some(commands) = read_option_vec_string(vm, &dict, "actCommands", "enemyStatus", true) {
+                                    enemy_state.act_commands = commands;
+                                }
+                                match dict.get_item_opt("actTexts", vm) {
+                                    Ok(Some(act_texts_obj)) => match act_texts_obj.try_into_value::<PyDictRef>(vm) {
+                                        Ok(act_texts) => {
+                                            for (key, value) in &act_texts {
+                                                let command: String = match key.try_into_value(vm) {
+                                                    Ok(name) => name,
+                                                    Err(err) => {
+                                                        vm.print_exception(err.clone());
+                                                        println!("Warning: enemyStatus actTexts key {:?}", err);
+                                                        continue;
+                                                    }
+                                                };
+                                                let text: String = match value.try_into_value(vm) {
+                                                    Ok(result) => result,
+                                                    Err(err) => {
+                                                        vm.print_exception(err.clone());
+                                                        println!("Warning: enemyStatus actTexts value {:?}", err);
+                                                        continue;
+                                                    }
+                                                };
+                                                enemy_state.act_texts.insert(command, text);
+                                            }
+                                        }
+                                        Err(err) => {
+                                            vm.print_exception(err.clone());
+                                            println!("Warning: enemyStatus actTexts {:?}", err);
+                                        }
+                                    },
+                                    Ok(None) => println!("Warning: enemyStatus missing actTexts"),
+                                    Err(err) => {
+                                        vm.print_exception(err.clone());
+                                        println!("Warning: enemyStatus actTexts {:?}", err);
+                                    }
+                                }
+                                if let Some(messages) = read_option_vec_string(vm, &dict, "bubbleMessages", "enemyStatus", true) {
+                                    enemy_state.bubble_messages = messages;
+                                }
+                                if let Some(body_texture) = read_option_string(vm, &dict, "bodyTexture", "enemyStatus", true) {
+                                    enemy_state.body_texture = body_texture;
+                                }
+                                if let Some(head_texture) = read_option_string(vm, &dict, "headTexture", "enemyStatus", true) {
+                                    enemy_state.head_texture = head_texture;
+                                }
+                                if let Some(head_yoffset) = read_option_f32(vm, &dict, "headYOffset", "enemyStatus", true) {
+                                    enemy_state.head_yoffset = head_yoffset;
+                                }
+                                if let Some(base_x) = read_option_f32(vm, &dict, "baseX", "enemyStatus", true) {
+                                    enemy_state.base_x = base_x;
+                                }
+                                if let Some(base_y) = read_option_f32(vm, &dict, "baseY", "enemyStatus", true) {
+                                    enemy_state.base_y = base_y;
+                                }
+                                if let Some(scale) = read_option_f32(vm, &dict, "scale", "enemyStatus", true) {
+                                    enemy_state.scale = scale;
+                                }
+                            }
+                            Err(err) => {
+                                vm.print_exception(err.clone());
+                                println!("Warning: enemyStatus result {:?}", err);
+                            }
+                        },
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: enemyStatus call {:?}", err);
+                        }
+                    },
+                    Ok(None) => println!("Warning: enemyStatus missing getEnemyStatus"),
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                        println!("Warning: enemyStatus lookup {:?}", err);
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 読み込み検証
+fn validate_loaded_states(player_state: &mut PlayerState, enemy_state: &mut EnemyState) {
+    if player_state.name.is_empty() {
+        println!("Warning: playerStatus missing name");
     }
 
-    commands.insert_resource(itemDictionary);
-    commands.insert_resource(gameState);
+    if player_state.max_hp <= 0.0 {
+        println!("Warning: playerStatus maxHp invalid");
+        player_state.max_hp = 1.0;
+    }
 
-    let enemyBaseX = 320.0; 
-    let enemyBaseY = 160.0; 
-    let enemyScale = 1.0; 
+    if player_state.hp <= 0.0 {
+        println!("Warning: playerStatus hp invalid");
+        player_state.hp = player_state.max_hp;
+    }
+
+    if player_state.speed <= 0.0 {
+        println!("Warning: playerStatus speed invalid");
+    }
+
+    if player_state.invincibility_duration <= 0.0 {
+        println!("Warning: playerStatus invincibilityDuration invalid");
+    }
+
+    if enemy_state.max_hp <= 0 {
+        println!("Warning: enemyMaxHp invalid");
+        enemy_state.max_hp = 1;
+    }
+
+    if enemy_state.name.is_empty() {
+        println!("Warning: enemyStatus missing enemyName");
+    }
+
+    if enemy_state.body_texture.is_empty() {
+        println!("Warning: enemyStatus missing bodyTexture");
+    }
+
+    if enemy_state.head_texture.is_empty() {
+        println!("Warning: enemyStatus missing headTexture");
+    }
+}
+
+// 初期フェーズ適用
+fn apply_initial_phase(
+    project_name: &str,
+    phase_script_name: &str,
+    python_runtime: &PythonRuntime,
+    enemy_state: &mut EnemyState,
+    combat_state: &mut CombatState,
+    menu_state: &mut MenuState,
+) {
+    combat_state.phase_name = phase::resolve_initial_phase(project_name, phase_script_name, python_runtime);
+    if !combat_state.phase_name.is_empty() {
+        if let Some(next_phase) = phase::apply_phase_update(enemy_state, combat_state, menu_state, project_name, "start", python_runtime) {
+            if next_phase != combat_state.phase_name {
+                combat_state.phase_name = next_phase;
+                combat_state.phase_turn = 0;
+                let _ = phase::apply_phase_update(enemy_state, combat_state, menu_state, project_name, "start", python_runtime);
+            }
+        }
+    }
+}
+
+// 敵生成
+fn spawn_enemy_entities(commands: &mut Commands, asset_server: &AssetServer, enemy_state: &EnemyState) {
+    let enemy_base_x = enemy_state.base_x;
+    let enemy_base_y = enemy_state.base_y;
+    let enemy_scale = if enemy_state.scale <= 0.0 {
+        println!("Warning: enemyStatus scale invalid");
+        1.0
+    } else {
+        enemy_state.scale
+    };
 
     commands.spawn((
         SpriteBundle {
-            texture: assetServer.load("enemy/spr_froglegs_0.png"),
-            sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
+            sprite: Sprite { image: asset_server.load(&enemy_state.body_texture), color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
-                translation: gml_to_bevy(enemyBaseX, enemyBaseY) + Vec3::new(0.0, 0.0, Z_ENEMY_BODY),
-                scale: Vec3::splat(enemyScale), 
+                translation: gml_to_bevy(enemy_base_x, enemy_base_y) + Vec3::new(0.0, 0.0, Z_ENEMY_BODY),
+                scale: Vec3::splat(enemy_scale),
                 ..default()
             },
             ..default()
         },
-        EnemyBody, 
+        EnemyBody,
         ActCommands {
-            commands: vec!["Check".to_string(), "Compliment".to_string(), "Threaten".to_string()],
+            commands: enemy_state.act_commands.clone(),
         },
         Cleanup,
     ));
 
-    let headYOffset = 22.0; 
-    let headPos = gml_to_bevy(enemyBaseX, enemyBaseY - headYOffset);
+    let head_yoffset = enemy_state.head_yoffset;
+    let head_pos = gml_to_bevy(enemy_base_x, enemy_base_y - head_yoffset);
     commands.spawn((
         SpriteBundle {
-            texture: assetServer.load("enemy/spr_froghead_0.png"),
-            sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
+            sprite: Sprite { image: asset_server.load(&enemy_state.head_texture), color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
-                translation: headPos + Vec3::new(0.0, 0.0, Z_ENEMY_HEAD),
-                scale: Vec3::splat(enemyScale), 
+                translation: head_pos + Vec3::new(0.0, 0.0, Z_ENEMY_HEAD),
+                scale: Vec3::splat(enemy_scale),
                 ..default()
             },
             ..default()
         },
-        EnemyHead { baseY: headPos.y, timer: 0.0 },
-        EnemyBody, 
+        EnemyHead { base_y: head_pos.y, timer: 0.0 },
+        EnemyBody,
         Cleanup,
     ));
+}
 
+// ソウル生成
+fn spawn_soul(commands: &mut Commands, asset_server: &AssetServer) {
     commands.spawn((
         SpriteBundle {
-            texture: assetServer.load("heart/spr_heart_0.png"), 
-            sprite: Sprite { color: Color::WHITE, custom_size: Some(Vec2::new(16.0, 16.0)), ..default() },
+            sprite: Sprite { image: asset_server.load("texture/heart/spr_heart_0.png"), color: Color::WHITE, custom_size: Some(Vec2::new(16.0, 16.0)), ..default() },
             transform: Transform::from_translation(gml_to_bevy(0.0, 0.0) + Vec3::new(0.0, 0.0, Z_SOUL)),
             ..default()
         },
         Soul,
         Cleanup,
     ));
+}
 
+// メニューボタン生成
+fn spawn_menu_buttons(commands: &mut Commands, asset_server: &AssetServer) {
     let buttons = [
-        (BTN_FIGHT_X, "button/spr_fightbt_0.png", "button/spr_fightbt_1.png", 0),
-        (BTN_ACT_X,   "button/spr_actbt_center_0.png", "button/spr_actbt_center_1.png", 1),
-        (BTN_ITEM_X,  "button/spr_itembt_0.png",  "button/spr_itembt_1.png",  2),
-        (BTN_MERCY_X, "button/spr_sparebt_0.png", "button/spr_sparebt_1.png", 3),
+        (BTN_FIGHT_X, "texture/button/spr_fightbt_0.png", "texture/button/spr_fightbt_1.png", 0),
+        (BTN_ACT_X,   "texture/button/spr_actbt_center_0.png", "texture/button/spr_actbt_center_1.png", 1),
+        (BTN_ITEM_X,  "texture/button/spr_itembt_0.png",  "texture/button/spr_itembt_1.png",  2),
+        (BTN_MERCY_X, "texture/button/spr_sparebt_0.png", "texture/button/spr_sparebt_1.png", 3),
     ];
 
-    for (x, normalPath, selectedPath, idx) in buttons {
-        let normalHandle = assetServer.load(normalPath);
-        let selectedHandle = assetServer.load(selectedPath);
+    for (x, normal_path, selected_path, idx) in buttons {
+        let normal_handle = asset_server.load(normal_path);
+        let selected_handle = asset_server.load(selected_path);
 
         commands.spawn((
             SpriteBundle {
-                texture: normalHandle.clone(),
-                sprite: Sprite { color: Color::WHITE, custom_size: Some(Vec2::new(110.0, 42.0)), ..default() },
+                sprite: Sprite { image: normal_handle.clone(), color: Color::WHITE, custom_size: Some(Vec2::new(110.0, 42.0)), ..default() },
                 transform: Transform::from_translation(gml_to_bevy(x + 55.0, BUTTON_Y_GML + 21.0) + Vec3::new(0.0, 0.0, Z_BUTTON)),
                 ..default()
             },
-            ButtonVisual { index: idx, normalTexture: normalHandle, selectedTexture: selectedHandle },
+            ButtonVisual { index: idx, normal_texture: normal_handle, selected_texture: selected_handle },
             Cleanup,
         ));
     }
+}
 
+// バトルボックス表示
+fn spawn_battle_box_visuals(commands: &mut Commands) {
     commands.spawn((
         SpriteBundle {
             sprite: Sprite { color: Color::WHITE, ..default() },
@@ -269,50 +590,51 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
         BackgroundVisual,
         Cleanup,
     ));
+}
 
-    let fontSize = 23.0; 
-    let fontStyle = TextStyle { font: gameFonts.main.clone(), font_size: fontSize, color: COLOR_UI_TEXT };
+// UI生成
+fn spawn_ui(commands: &mut Commands, game_fonts: &GameFonts, player_state: &PlayerState, menu_state: &MenuState) {
+    let font_size = 23.0 * TEXT_SCALE;
+    let font_style = TextFont { font: game_fonts.main.clone(), font_size, ..default() };
+    let font_color = TextColor(COLOR_UI_TEXT);
 
     commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("CHARA", fontStyle.clone()),
-            text_anchor: Anchor::TopLeft,
-            transform: Transform::from_translation(gml_to_bevy(30.0, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
-            ..default()
-        },
+        Text2d::new(player_state.name.clone()),
+        font_style.clone(),
+        font_color,
+        Anchor::TopLeft,
+        Transform::from_translation(gml_to_bevy(30.0, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
         PlayerNameText,
         Cleanup,
     ));
 
-    let lvX = 30.0 + 85.0 + 15.0; 
+    let lv_x = 30.0 + 85.0 + 15.0;
     commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("LV 1", fontStyle.clone()),
-            text_anchor: Anchor::TopLeft,
-            transform: Transform::from_translation(gml_to_bevy(lvX, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
-            ..default()
-        },
+        Text2d::new(format!("LV {}", player_state.lv)),
+        font_style.clone(),
+        font_color,
+        Anchor::TopLeft,
+        Transform::from_translation(gml_to_bevy(lv_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
         LvText,
         Cleanup,
     ));
 
     commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("HP", TextStyle { font: gameFonts.hpLabel.clone(), font_size: 10.0, color: COLOR_UI_TEXT }),
-            text_anchor: Anchor::TopLeft,
-            transform: Transform::from_translation(gml_to_bevy(225.0, 405.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
-            ..default()
-        },
+        Text2d::new("HP"),
+        TextFont { font: game_fonts.hp_label.clone(), font_size: 10.0 * TEXT_SCALE, ..default() },
+        TextColor(COLOR_UI_TEXT),
+        Anchor::TopLeft,
+        Transform::from_translation(gml_to_bevy(225.0, 405.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
         Cleanup,
     ));
 
-    let hpBarX = 250.0;
-    let hpBarY = 401.0;
+    let hp_bar_x = 250.0;
+    let hp_bar_y = 401.0;
 
     commands.spawn((
         SpriteBundle {
             sprite: Sprite { color: COLOR_HP_RED, anchor: Anchor::TopLeft, ..default() },
-            transform: Transform::from_translation(gml_to_bevy(hpBarX, hpBarY) + Vec3::new(0.0, 0.0, Z_HP_BAR_BG)),
+            transform: Transform::from_translation(gml_to_bevy(hp_bar_x, hp_bar_y) + Vec3::new(0.0, 0.0, Z_HP_BAR_BG)),
             ..default()
         },
         HpBarRed,
@@ -322,60 +644,59 @@ pub fn spawnGameObjects(commands: &mut Commands, assetServer: &AssetServer, game
     commands.spawn((
         SpriteBundle {
             sprite: Sprite { color: COLOR_HP_YELLOW, anchor: Anchor::TopLeft, ..default() },
-            transform: Transform::from_translation(gml_to_bevy(hpBarX, hpBarY) + Vec3::new(0.0, 0.0, Z_HP_BAR_FG)),
+            transform: Transform::from_translation(gml_to_bevy(hp_bar_x, hp_bar_y) + Vec3::new(0.0, 0.0, Z_HP_BAR_FG)),
             ..default()
         },
         HpBarYellow,
         Cleanup,
     ));
 
-    let hpTextX = 250.0 + 24.0 + 15.0;
+    let hp_text_x = 250.0 + 24.0 + 15.0;
     commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("20 / 20", fontStyle),
-            text_anchor: Anchor::TopLeft,
-            transform: Transform::from_translation(gml_to_bevy(hpTextX, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
-            ..default()
-        },
+        Text2d::new(format!("{:.0} / {:.0}", player_state.hp, player_state.max_hp)),
+        font_style,
+        font_color,
+        Anchor::TopLeft,
+        Transform::from_translation(gml_to_bevy(hp_text_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
         HpText,
         Cleanup,
     ));
-    
+
     commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("", TextStyle { font: gameFonts.dialog.clone(), font_size: 32.0, color: Color::WHITE }),
-            text_anchor: Anchor::TopLeft,
-            transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
-            ..default()
-        },
-        Typewriter { 
-            fullText: "* Froggit hops close!".to_string(), 
-            visibleChars: 0, 
-            timer: Timer::from_seconds(0.03, TimerMode::Repeating), 
-            finished: false 
+        Text2d::new(""),
+        TextFont { font: game_fonts.dialog.clone(), font_size: 32.0 * TEXT_SCALE, ..default() },
+        TextColor(Color::WHITE),
+        Anchor::TopLeft,
+        Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
+        Typewriter {
+            full_text: menu_state.dialog_text.clone(),
+            visible_chars: 0,
+            timer: Timer::from_seconds(0.03, TimerMode::Repeating),
+            finished: false
         },
         MainDialogText,
         Cleanup,
     ));
 }
 
-pub fn cameraScalingSystem(
-    windowQuery: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    mut projectionQuery: Query<&mut OrthographicProjection, With<MainCamera>>,
+// カメラスケール調整
+pub fn camera_scaling_system(
+    window_query: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut projection_query: Query<&mut OrthographicProjection, With<MainCamera>>,
 ) {
-    let Ok(window) = windowQuery.get_single() else { return };
+    let Ok(window) = window_query.get_single() else { return };
     if !window.visible {
         return;
     }
 
-    if let Ok(mut projection) = projectionQuery.get_single_mut() {
-        let targetRatio = 640.0 / 480.0;
-        let windowRatio = window.width() / window.height();
+    if let Ok(mut projection) = projection_query.get_single_mut() {
+        let target_ratio = 640.0 / 480.0;
+        let window_ratio = window.width() / window.height();
 
-        if windowRatio > targetRatio {
-            projection.scaling_mode = bevy::render::camera::ScalingMode::FixedVertical(480.0);
+        if window_ratio > target_ratio {
+            projection.scaling_mode = bevy::render::camera::ScalingMode::FixedVertical { viewport_height: 480.0 };
         } else {
-            projection.scaling_mode = bevy::render::camera::ScalingMode::FixedHorizontal(640.0);
+            projection.scaling_mode = bevy::render::camera::ScalingMode::FixedHorizontal { viewport_width: 640.0 };
         }
     }
 }

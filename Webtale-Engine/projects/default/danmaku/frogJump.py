@@ -2,7 +2,7 @@ from api import Bullet
 
 def init():
     return {
-        "textureWait": "enemy/spr_frogbullet_stop.png",
+        "textureWait": "texture/enemy/spr_frogbullet_stop.png",
         "box": [217.0, 125.0, 417.0, 385.0]
     }
 
@@ -35,9 +35,8 @@ class FrogBullet(Bullet):
 
     def jump(self):
         self.state = "jumping"
-        self.setTexture("enemy/spr_frogbullet_go.png")
+        self.setTexture("texture/enemy/spr_frogbullet_go.png")
         
         angle = 145.0 - self.random(20.0)
         speed = (7.0 + self.random(3.0)) * 30.0
         self.setSpeed(speed, angle)
-        

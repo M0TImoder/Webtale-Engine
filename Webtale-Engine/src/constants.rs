@@ -1,23 +1,31 @@
 use bevy::prelude::Color;
 use bevy::prelude::*;
 
+// プロジェクト設定
 pub const PROJECT_NAME: &str = "default";
 
+// 画面サイズ
 pub const WINDOW_WIDTH: f32 = 640.0;
 pub const WINDOW_HEIGHT: f32 = 480.0;
+// 座標原点
 pub const ORIGIN_X: f32 = -320.0;
 pub const ORIGIN_Y: f32 = 240.0;
 
+// 色定数
 pub const COLOR_HP_RED: Color = Color::rgb(1.0, 0.0, 0.0);
 pub const COLOR_HP_YELLOW: Color = Color::rgb(1.0, 1.0, 0.0);
 pub const COLOR_UI_TEXT: Color = Color::WHITE;
+// 文字サイズ倍率
+pub const TEXT_SCALE: f32 = 0.75;
 
+// ボタン位置
 pub const BUTTON_Y_GML: f32 = 432.0;
 pub const BTN_FIGHT_X: f32 = 32.0;
 pub const BTN_ACT_X: f32 = 185.0;
 pub const BTN_ITEM_X: f32 = 345.0;
 pub const BTN_MERCY_X: f32 = 500.0;
 
+// Z順
 pub const Z_ENEMY_BODY: f32 = 3.0;
 pub const Z_ENEMY_HEAD: f32 = 4.0;
 
@@ -45,6 +53,7 @@ pub const Z_SOUL: f32 = 40.0;
 pub const Z_GAMEOVER_BG: f32 = 100.0;
 pub const Z_GAMEOVER_SOUL: f32 = 110.0;
 
+// メニュー層
 pub const MENU_LAYER_TOP: i32 = 0;
 pub const MENU_LAYER_FIGHT_TARGET: i32 = 1;
 pub const MENU_LAYER_ACT_TARGET: i32 = 2;
@@ -52,8 +61,10 @@ pub const MENU_LAYER_ITEM: i32 = 3;
 pub const MENU_LAYER_MERCY: i32 = 4;
 pub const MENU_LAYER_ACT_COMMAND: i32 = 10;
 
+// ページ設定
 pub const ITEMS_PER_PAGE: usize = 4;
 
+// 座標変換
 pub fn gml_to_bevy(x: f32, y: f32) -> Vec3 {
     Vec3::new(ORIGIN_X + x, ORIGIN_Y - y, 0.0)
 }
