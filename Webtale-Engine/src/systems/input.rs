@@ -13,21 +13,21 @@ use bevy::sprite::Anchor;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
-use crate::systems::setup::spawnGameObjects; 
+use crate::systems::setup::spawn_game_objects; 
 
-fn spawnEditorWindow(
+fn spawn_editor_window(
     commands: &mut Commands,
-    assetServer: &AssetServer,
+    asset_server: &AssetServer,
     images: &mut Assets<Image>,
-    editorPreviewTexture: &mut EditorPreviewTexture,
-    danmakuPreviewTexture: &mut DanmakuPreviewTexture,
-    allEditorEntities: &Query<Entity, With<EditorWindow>>,
+    editor_preview_texture: &mut EditorPreviewTexture,
+    danmaku_preview_texture: &mut DanmakuPreviewTexture,
+    all_editor_entities: &Query<Entity, With<EditorWindow>>,
 ) {
-    for entity in allEditorEntities.iter() {
+    for entity in all_editor_entities.iter() {
         commands.entity(entity).despawn_recursive();
     }
 
-    let editorWindow = commands.spawn((
+    let editor_window = commands.spawn((
         Window {
             title: "Danmaku Editor".to_string(),
             resolution: (1280.0, 720.0).into(),
@@ -59,14 +59,14 @@ fn spawnEditorWindow(
         ..default()
     };
     image.resize(size);
-    let imageHandle = images.add(image);
+    let image_handle = images.add(image);
 
-    editorPreviewTexture.0 = imageHandle.clone();
+    editor_preview_texture.0 = image_handle.clone();
 
     commands.spawn((
         Camera2dBundle {
             camera: Camera {
-                target: RenderTarget::Image(imageHandle.clone()),
+                target: RenderTarget::Image(image_handle.clone()),
                 order: -1,
                 ..default()
             },
@@ -84,7 +84,7 @@ fn spawnEditorWindow(
     commands.spawn((
         Camera2dBundle {
             camera: Camera {
-                target: RenderTarget::Window(WindowRef::Entity(editorWindow)),
+                target: RenderTarget::Window(WindowRef::Entity(editor_window)),
                 clear_color: ClearColorConfig::Custom(Color::hex("222222").unwrap()), 
                 ..default()
             },
@@ -97,7 +97,7 @@ fn spawnEditorWindow(
 
     commands.spawn((
         SpriteBundle {
-            texture: imageHandle,
+            texture: image_handle,
             transform: Transform::from_xyz(0.0, 75.0, 0.0), 
             ..default()
         },
@@ -106,7 +106,7 @@ fn spawnEditorWindow(
         BattleScreenPreview,
     ));
 
-    let mut previewImage = Image {
+    let mut preview_image = Image {
         texture_descriptor: bevy::render::render_resource::TextureDescriptor {
             label: Some("Danmaku Preview Texture"),
             size,
@@ -121,14 +121,14 @@ fn spawnEditorWindow(
         },
         ..default()
     };
-    previewImage.resize(size);
-    let previewImageHandle = images.add(previewImage);
-    danmakuPreviewTexture.0 = previewImageHandle.clone();
+    preview_image.resize(size);
+    let preview_image_handle = images.add(preview_image);
+    danmaku_preview_texture.0 = preview_image_handle.clone();
 
     commands.spawn((
         Camera2dBundle {
             camera: Camera {
-                target: RenderTarget::Image(previewImageHandle.clone()),
+                target: RenderTarget::Image(preview_image_handle.clone()),
                 order: -1,
                 clear_color: ClearColorConfig::Custom(Color::BLACK),
                 ..default()
@@ -144,7 +144,7 @@ fn spawnEditorWindow(
         EditorWindow, 
     ));
 
-    let boxCenter = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
+    let box_center = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
     
     commands.spawn((
         SpriteBundle {
@@ -153,7 +153,7 @@ fn spawnEditorWindow(
                 custom_size: Some(Vec2::new(570.0, 135.0)), 
                 ..default()
             },
-            transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 0.0)),
+            transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, 0.0)),
             ..default()
         },
         RenderLayers::layer(2),
@@ -167,7 +167,7 @@ fn spawnEditorWindow(
                 custom_size: Some(Vec2::new(560.0, 125.0)), 
                 ..default()
             },
-            transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 1.0)),
+            transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, 1.0)),
             ..default()
         },
         RenderLayers::layer(2),
@@ -176,8 +176,8 @@ fn spawnEditorWindow(
 
     commands.spawn((
         SpriteBundle {
-            texture: assetServer.load("player/spr_soul_0.png"),
-            transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, 2.0)),
+            texture: asset_server.load("player/spr_soul_0.png"),
+            transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, 2.0)),
             ..default()
         },
         RenderLayers::layer(2),
@@ -185,75 +185,75 @@ fn spawnEditorWindow(
     ));
 }
 
-pub fn spawnInitialEditorWindow(
+pub fn spawn_initial_editor_window(
     mut commands: Commands,
-    assetServer: Res<AssetServer>,
-    allEditorEntities: Query<Entity, With<EditorWindow>>, 
-    openEditorWindowQuery: Query<Entity, (With<EditorWindow>, With<Window>)>, 
+    asset_server: Res<AssetServer>,
+    all_editor_entities: Query<Entity, With<EditorWindow>>, 
+    open_editor_window_query: Query<Entity, (With<EditorWindow>, With<Window>)>, 
     mut images: ResMut<Assets<Image>>,
-    mut editorPreviewTexture: ResMut<EditorPreviewTexture>,
-    mut danmakuPreviewTexture: ResMut<DanmakuPreviewTexture>,
+    mut editor_preview_texture: ResMut<EditorPreviewTexture>,
+    mut danmaku_preview_texture: ResMut<DanmakuPreviewTexture>,
 ) {
-    if openEditorWindowQuery.is_empty() {
-        spawnEditorWindow(
+    if open_editor_window_query.is_empty() {
+        spawn_editor_window(
             &mut commands,
-            &assetServer,
+            &asset_server,
             &mut images,
-            &mut editorPreviewTexture,
-            &mut danmakuPreviewTexture,
-            &allEditorEntities,
+            &mut editor_preview_texture,
+            &mut danmaku_preview_texture,
+            &all_editor_entities,
         );
     }
 }
 
-pub fn handleGlobalInput(
+pub fn handle_global_input(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
-    mut windowQuery: Query<(Entity, &mut Window), With<bevy::window::PrimaryWindow>>,
-    mut exitWriter: EventWriter<AppExit>,
-    assetServer: Res<AssetServer>,
-    gameFonts: Res<GameFonts>,
+    mut window_query: Query<(Entity, &mut Window), With<bevy::window::PrimaryWindow>>,
+    mut exit_writer: EventWriter<AppExit>,
+    asset_server: Res<AssetServer>,
+    game_fonts: Res<GameFonts>,
     python_runtime: NonSend<PythonRuntime>,
-    cleanupQuery: Query<Entity, With<Cleanup>>,
-    allEditorEntities: Query<Entity, With<EditorWindow>>, 
-    openEditorWindowQuery: Query<Entity, (With<EditorWindow>, With<Window>)>, 
+    cleanup_query: Query<Entity, With<Cleanup>>,
+    all_editor_entities: Query<Entity, With<EditorWindow>>, 
+    open_editor_window_query: Query<Entity, (With<EditorWindow>, With<Window>)>, 
     mut images: ResMut<Assets<Image>>,
-    mut eguiContexts: EguiContexts,
-    mut editorPreviewTexture: ResMut<EditorPreviewTexture>,
-    mut danmakuPreviewTexture: ResMut<DanmakuPreviewTexture>,
-    mut windowClosedReader: EventReader<WindowClosed>,
-    mut windowCloseRequestedReader: EventReader<WindowCloseRequested>,
+    mut egui_contexts: EguiContexts,
+    mut editor_preview_texture: ResMut<EditorPreviewTexture>,
+    mut danmaku_preview_texture: ResMut<DanmakuPreviewTexture>,
+    mut window_closed_reader: EventReader<WindowClosed>,
+    mut window_close_requested_reader: EventReader<WindowCloseRequested>,
 ) {
-    for closeRequested in windowCloseRequestedReader.read() {
-        if let Ok(editorWindow) = openEditorWindowQuery.get_single() {
-            if closeRequested.window == editorWindow {
-                exitWriter.send(AppExit::default());
+    for close_requested in window_close_requested_reader.read() {
+        if let Ok(editor_window) = open_editor_window_query.get_single() {
+            if close_requested.window == editor_window {
+                exit_writer.send(AppExit::default());
                 return;
             }
         }
 
-        if let Ok((windowEntity, mut window)) = windowQuery.get_single_mut() {
-            if closeRequested.window == windowEntity {
+        if let Ok((window_entity, mut window)) = window_query.get_single_mut() {
+            if close_requested.window == window_entity {
                 window.visible = false;
             }
         }
     }
 
-    for closed in windowClosedReader.read() {
-        if let Ok(editorWindow) = openEditorWindowQuery.get_single() {
-            if closed.window == editorWindow {
-                exitWriter.send(AppExit::default());
+    for closed in window_closed_reader.read() {
+        if let Ok(editor_window) = open_editor_window_query.get_single() {
+            if closed.window == editor_window {
+                exit_writer.send(AppExit::default());
                 return;
             }
         }
     }
 
     if input.just_pressed(KeyCode::Escape) {
-        exitWriter.send(AppExit::default());
+        exit_writer.send(AppExit::default());
     }
 
     if (input.pressed(KeyCode::AltLeft) || input.pressed(KeyCode::AltRight)) && input.just_pressed(KeyCode::Enter) {
-        if let Ok((_, mut window)) = windowQuery.get_single_mut() {
+        if let Ok((_, mut window)) = window_query.get_single_mut() {
             window.mode = match window.mode {
                 WindowMode::Windowed => WindowMode::BorderlessFullscreen,
                 _ => WindowMode::Windowed,
@@ -262,22 +262,22 @@ pub fn handleGlobalInput(
     }
 
     if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyW) {
-        if let Ok((_, mut window)) = windowQuery.get_single_mut() {
+        if let Ok((_, mut window)) = window_query.get_single_mut() {
             window.visible = true;
         }
     }
 
     if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyR) {
-        let mut isTyping = false;
-        if let Ok(editorEntity) = openEditorWindowQuery.get_single() {
-            let ctx = eguiContexts.ctx_for_window_mut(editorEntity);
+        let mut is_typing = false;
+        if let Ok(editor_entity) = open_editor_window_query.get_single() {
+            let ctx = egui_contexts.ctx_for_window_mut(editor_entity);
             if ctx.wants_keyboard_input() {
-                isTyping = true;
+                is_typing = true;
             }
         }
 
-        if !isTyping {
-            for entity in cleanupQuery.iter() {
+        if !is_typing {
+            for entity in cleanup_query.iter() {
                 commands.entity(entity).despawn_recursive();
             }
             
@@ -286,271 +286,271 @@ pub fn handleGlobalInput(
                 target: Rect::new(32.0, 250.0, 602.0, 385.0),
             });
 
-            spawnGameObjects(&mut commands, &assetServer, &gameFonts, &python_runtime);
+            spawn_game_objects(&mut commands, &asset_server, &game_fonts, &python_runtime);
         }
     }
 
     if (input.pressed(KeyCode::ShiftLeft) || input.pressed(KeyCode::ShiftRight)) && input.just_pressed(KeyCode::KeyE) {
-        if openEditorWindowQuery.is_empty() {
-            spawnEditorWindow(
+        if open_editor_window_query.is_empty() {
+            spawn_editor_window(
                 &mut commands,
-                &assetServer,
+                &asset_server,
                 &mut images,
-                &mut editorPreviewTexture,
-                &mut danmakuPreviewTexture,
-                &allEditorEntities,
+                &mut editor_preview_texture,
+                &mut danmaku_preview_texture,
+                &all_editor_entities,
             );
         }
     }
 }
 
-pub fn menuInputSystem(
+pub fn menu_input_system(
     mut commands: Commands,
-    assetServer: Res<AssetServer>,
+    asset_server: Res<AssetServer>,
     input: Res<ButtonInput<KeyCode>>,
-    mut gameState: ResMut<GameState>,
-    mut typewriterQuery: Query<(Entity, &mut Typewriter), With<MainDialogText>>,
-    actCommandsQuery: Query<&ActCommands, With<EnemyBody>>,
-    menuItemsQuery: Query<Entity, With<MenuTextItem>>,
-    mut eguiContexts: EguiContexts,
-    editorQuery: Query<Entity, (With<EditorWindow>, With<Window>)>,
-    editorState: Option<Res<EditorState>>,
-    itemDict: Res<ItemDictionary>,
+    mut game_state: ResMut<GameState>,
+    mut typewriter_query: Query<(Entity, &mut Typewriter), With<MainDialogText>>,
+    act_commands_query: Query<&ActCommands, With<EnemyBody>>,
+    menu_items_query: Query<Entity, With<MenuTextItem>>,
+    mut egui_contexts: EguiContexts,
+    editor_query: Query<Entity, (With<EditorWindow>, With<Window>)>,
+    editor_state: Option<Res<EditorState>>,
+    item_dict: Res<ItemDictionary>,
 ) {
-    if let Ok(editorEntity) = editorQuery.get_single() {
-        if eguiContexts.ctx_for_window_mut(editorEntity).wants_keyboard_input() {
+    if let Ok(editor_entity) = editor_query.get_single() {
+        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
             return;
         }
     }
 
-    if let Some(state) = editorState {
-        if state.currentTab == EditorTab::DanmakuPreview {
+    if let Some(state) = editor_state {
+        if state.current_tab == EditorTab::DanmakuPreview {
             return;
         }
     }
 
-    if gameState.mnFight != 0 || gameState.myFight != 0 { return; }
-    let layer = gameState.menuLayer;
-    let cursorIdx = gameState.menuCoords[layer as usize] as usize;
+    if game_state.mn_fight != 0 || game_state.my_fight != 0 { return; }
+    let layer = game_state.menu_layer;
+    let cursor_idx = game_state.menu_coords[layer as usize] as usize;
     
     if input.just_pressed(KeyCode::ArrowLeft) || input.just_pressed(KeyCode::KeyA) {
         if layer == MENU_LAYER_TOP {
-            gameState.menuCoords[layer as usize] = (gameState.menuCoords[layer as usize] - 1 + 4) % 4;
+            game_state.menu_coords[layer as usize] = (game_state.menu_coords[layer as usize] - 1 + 4) % 4;
         } else if layer == MENU_LAYER_ACT_COMMAND {
-             if cursorIdx % 2 == 1 { gameState.menuCoords[layer as usize] -= 1; }
+             if cursor_idx % 2 == 1 { game_state.menu_coords[layer as usize] -= 1; }
         } else if layer == MENU_LAYER_ITEM {
-            if cursorIdx % 2 == 1 { 
-                gameState.menuCoords[layer as usize] -= 1; 
-            } else if gameState.itemPage > 0 {
-                gameState.itemPage -= 1;
-                gameState.menuCoords[layer as usize] += 1; 
+            if cursor_idx % 2 == 1 { 
+                game_state.menu_coords[layer as usize] -= 1; 
+            } else if game_state.item_page > 0 {
+                game_state.item_page -= 1;
+                game_state.menu_coords[layer as usize] += 1; 
             }
         }
     }
     if input.just_pressed(KeyCode::ArrowRight) || input.just_pressed(KeyCode::KeyD) {
         if layer == MENU_LAYER_TOP {
-            gameState.menuCoords[layer as usize] = (gameState.menuCoords[layer as usize] + 1) % 4;
+            game_state.menu_coords[layer as usize] = (game_state.menu_coords[layer as usize] + 1) % 4;
         } else if layer == MENU_LAYER_ACT_COMMAND {
-             if cursorIdx % 2 == 0 {
-                 if let Some(acts) = actCommandsQuery.iter().next() {
-                     if cursorIdx + 1 < acts.commands.len() { gameState.menuCoords[layer as usize] += 1; }
+             if cursor_idx % 2 == 0 {
+                 if let Some(acts) = act_commands_query.iter().next() {
+                     if cursor_idx + 1 < acts.commands.len() { game_state.menu_coords[layer as usize] += 1; }
                  }
              }
         } else if layer == MENU_LAYER_ITEM {
-            let itemsOnPage = gameState.inventory.len().saturating_sub(gameState.itemPage * ITEMS_PER_PAGE).min(ITEMS_PER_PAGE);
-            if cursorIdx % 2 == 0 && cursorIdx + 1 < itemsOnPage {
-                gameState.menuCoords[layer as usize] += 1;
-            } else if cursorIdx % 2 == 1 && (gameState.itemPage + 1) * ITEMS_PER_PAGE < gameState.inventory.len() {
-                gameState.itemPage += 1;
-                gameState.menuCoords[layer as usize] -= 1; 
+            let items_on_page = game_state.inventory.len().saturating_sub(game_state.item_page * ITEMS_PER_PAGE).min(ITEMS_PER_PAGE);
+            if cursor_idx % 2 == 0 && cursor_idx + 1 < items_on_page {
+                game_state.menu_coords[layer as usize] += 1;
+            } else if cursor_idx % 2 == 1 && (game_state.item_page + 1) * ITEMS_PER_PAGE < game_state.inventory.len() {
+                game_state.item_page += 1;
+                game_state.menu_coords[layer as usize] -= 1; 
             }
         }
     }
     if input.just_pressed(KeyCode::ArrowUp) || input.just_pressed(KeyCode::KeyW) {
-         if layer == MENU_LAYER_ACT_COMMAND && cursorIdx >= 2 { gameState.menuCoords[layer as usize] -= 2; }
-         else if layer == MENU_LAYER_ITEM && cursorIdx >= 2 { gameState.menuCoords[layer as usize] -= 2; }
-         else if layer == MENU_LAYER_MERCY && cursorIdx > 0 { gameState.menuCoords[layer as usize] -= 1; }
+         if layer == MENU_LAYER_ACT_COMMAND && cursor_idx >= 2 { game_state.menu_coords[layer as usize] -= 2; }
+         else if layer == MENU_LAYER_ITEM && cursor_idx >= 2 { game_state.menu_coords[layer as usize] -= 2; }
+         else if layer == MENU_LAYER_MERCY && cursor_idx > 0 { game_state.menu_coords[layer as usize] -= 1; }
     }
     if input.just_pressed(KeyCode::ArrowDown) || input.just_pressed(KeyCode::KeyS) {
          if layer == MENU_LAYER_ACT_COMMAND {
-            if let Some(acts) = actCommandsQuery.iter().next() {
-                 if cursorIdx + 2 < acts.commands.len() { gameState.menuCoords[layer as usize] += 2; }
+            if let Some(acts) = act_commands_query.iter().next() {
+                 if cursor_idx + 2 < acts.commands.len() { game_state.menu_coords[layer as usize] += 2; }
             }
          } else if layer == MENU_LAYER_ITEM {
-            let itemsOnPage = gameState.inventory.len().saturating_sub(gameState.itemPage * ITEMS_PER_PAGE).min(ITEMS_PER_PAGE);
-            if cursorIdx + 2 < itemsOnPage { gameState.menuCoords[layer as usize] += 2; }
+            let items_on_page = game_state.inventory.len().saturating_sub(game_state.item_page * ITEMS_PER_PAGE).min(ITEMS_PER_PAGE);
+            if cursor_idx + 2 < items_on_page { game_state.menu_coords[layer as usize] += 2; }
          } else if layer == MENU_LAYER_MERCY {
-             if cursorIdx < 1 { gameState.menuCoords[layer as usize] += 1; }
+             if cursor_idx < 1 { game_state.menu_coords[layer as usize] += 1; }
          }
     }
 
     if input.just_pressed(KeyCode::KeyZ) {
         match layer {
             MENU_LAYER_TOP => {
-                let selected = gameState.menuCoords[MENU_LAYER_TOP as usize];
+                let selected = game_state.menu_coords[MENU_LAYER_TOP as usize];
                 match selected {
-                    0 => { gameState.menuLayer = MENU_LAYER_FIGHT_TARGET; gameState.menuCoords[MENU_LAYER_FIGHT_TARGET as usize] = 0; },
-                    1 => { gameState.menuLayer = MENU_LAYER_ACT_TARGET; gameState.menuCoords[MENU_LAYER_ACT_TARGET as usize] = 0; },
+                    0 => { game_state.menu_layer = MENU_LAYER_FIGHT_TARGET; game_state.menu_coords[MENU_LAYER_FIGHT_TARGET as usize] = 0; },
+                    1 => { game_state.menu_layer = MENU_LAYER_ACT_TARGET; game_state.menu_coords[MENU_LAYER_ACT_TARGET as usize] = 0; },
                     2 => { 
-                        if !gameState.inventory.is_empty() {
-                            gameState.menuLayer = MENU_LAYER_ITEM; 
-                            gameState.menuCoords[MENU_LAYER_ITEM as usize] = 0; 
-                            gameState.itemPage = 0;
+                        if !game_state.inventory.is_empty() {
+                            game_state.menu_layer = MENU_LAYER_ITEM; 
+                            game_state.menu_coords[MENU_LAYER_ITEM as usize] = 0; 
+                            game_state.item_page = 0;
                         }
                     }, 
-                    3 => { gameState.menuLayer = MENU_LAYER_MERCY; gameState.menuCoords[MENU_LAYER_MERCY as usize] = 0; }, 
+                    3 => { game_state.menu_layer = MENU_LAYER_MERCY; game_state.menu_coords[MENU_LAYER_MERCY as usize] = 0; }, 
                     _ => {}
                 }
             },
             MENU_LAYER_FIGHT_TARGET => {
-                gameState.lastPlayerAction = "attack".to_string();
-                gameState.lastActCommand = None;
-                gameState.mnFight = 4; 
-                let boxCenter = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
+                game_state.last_player_action = "attack".to_string();
+                game_state.last_act_command = None;
+                game_state.mn_fight = 4; 
+                let box_center = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
                 commands.spawn((
                     SpriteBundle {
-                        texture: assetServer.load("texture/attack/spr_target.png"),
+                        texture: asset_server.load("texture/attack/spr_target.png"),
                         sprite: Sprite { custom_size: Some(Vec2::new(566.0, 120.0)), ..default() },
-                        transform: Transform::from_translation(boxCenter + Vec3::new(0.0, 0.0, Z_ATTACK_TARGET)),
+                        transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, Z_ATTACK_TARGET)),
                         ..default()
                     },
                     AttackTargetBox,
                     Cleanup,
                 ));
-                let barStartX = gml_to_bevy(32.0, 0.0).x;
+                let bar_start_x = gml_to_bevy(32.0, 0.0).x;
                 commands.spawn((
                     SpriteBundle {
-                        texture: assetServer.load("texture/attack/spr_targetchoice_1.png"),
+                        texture: asset_server.load("texture/attack/spr_targetchoice_1.png"),
                         sprite: Sprite { custom_size: Some(Vec2::new(14.0, 120.0)), ..default() },
-                        transform: Transform::from_translation(Vec3::new(barStartX, boxCenter.y, Z_ATTACK_BAR)),
+                        transform: Transform::from_translation(Vec3::new(bar_start_x, box_center.y, Z_ATTACK_BAR)),
                         ..default()
                     },
-                    AttackBar { speed: 420.0, moving: true, flashTimer: Timer::from_seconds(0.08, TimerMode::Repeating), flashState: true },
+                    AttackBar { speed: 420.0, moving: true, flash_timer: Timer::from_seconds(0.08, TimerMode::Repeating), flash_state: true },
                     Cleanup,
                 ));
 
-                for entity in menuItemsQuery.iter() { commands.entity(entity).despawn(); }
-                if let Ok((entity, _)) = typewriterQuery.get_single_mut() { commands.entity(entity).despawn(); }
+                for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
+                if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
             },
             MENU_LAYER_ACT_TARGET => {
-                gameState.menuLayer = MENU_LAYER_ACT_COMMAND;
-                gameState.menuCoords[MENU_LAYER_ACT_COMMAND as usize] = 0;
+                game_state.menu_layer = MENU_LAYER_ACT_COMMAND;
+                game_state.menu_coords[MENU_LAYER_ACT_COMMAND as usize] = 0;
             },
             MENU_LAYER_ACT_COMMAND => {
-                let actIdx = gameState.menuCoords[MENU_LAYER_ACT_COMMAND as usize] as usize;
-                let mut textToDisplay = "* You did something.".to_string();
-                if let Some(acts) = actCommandsQuery.iter().next() {
-                    if actIdx < acts.commands.len() {
-                        let cmdName = &acts.commands[actIdx];
-                        gameState.lastPlayerAction = "act".to_string();
-                        gameState.lastActCommand = Some(cmdName.clone());
-                        if let Some(text) = gameState.enemyActTexts.get(cmdName) {
-                            textToDisplay = text.clone();
-                        } else if cmdName == "Check" {
-                            let enemyName = if gameState.enemyName.is_empty() { "ENEMY".to_string() } else { gameState.enemyName.to_uppercase() };
-                            textToDisplay = format!(
+                let act_idx = game_state.menu_coords[MENU_LAYER_ACT_COMMAND as usize] as usize;
+                let mut text_to_display = "* You did something.".to_string();
+                if let Some(acts) = act_commands_query.iter().next() {
+                    if act_idx < acts.commands.len() {
+                        let cmd_name = &acts.commands[act_idx];
+                        game_state.last_player_action = "act".to_string();
+                        game_state.last_act_command = Some(cmd_name.clone());
+                        if let Some(text) = game_state.enemy_act_texts.get(cmd_name) {
+                            text_to_display = text.clone();
+                        } else if cmd_name == "Check" {
+                            let enemy_name = if game_state.enemy_name.is_empty() { "ENEMY".to_string() } else { game_state.enemy_name.to_uppercase() };
+                            text_to_display = format!(
                                 "* {} - ATK {} DEF {}\n* ...",
-                                enemyName,
-                                gameState.enemyAtk,
-                                gameState.enemyDef
+                                enemy_name,
+                                game_state.enemy_atk,
+                                game_state.enemy_def
                             );
                         }
                     }
                 }
                 
-                gameState.myFight = 2; 
-                gameState.dialogText = textToDisplay.clone();
+                game_state.my_fight = 2; 
+                game_state.dialog_text = text_to_display.clone();
                 
-                for entity in menuItemsQuery.iter() { commands.entity(entity).despawn(); }
-                if let Ok((entity, _)) = typewriterQuery.get_single_mut() { commands.entity(entity).despawn(); }
+                for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
+                if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
                 
                 commands.spawn((
                     Text2dBundle {
-                        text: Text::from_section("", TextStyle { font: assetServer.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
+                        text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
                         text_anchor: Anchor::TopLeft,
                         transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                         ..default()
                     },
-                    Typewriter { fullText: textToDisplay, visibleChars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
+                    Typewriter { full_text: text_to_display, visible_chars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
                     MainDialogText,
                     Cleanup,
                 ));
             },
             MENU_LAYER_ITEM => {
-                let itemIndex = (gameState.itemPage * ITEMS_PER_PAGE) + gameState.menuCoords[MENU_LAYER_ITEM as usize] as usize;
+                let item_index = (game_state.item_page * ITEMS_PER_PAGE) + game_state.menu_coords[MENU_LAYER_ITEM as usize] as usize;
                 
-                if itemIndex < gameState.inventory.len() {
-                    gameState.lastPlayerAction = "item".to_string();
-                    gameState.lastActCommand = None;
-                    let itemName = gameState.inventory.remove(itemIndex);
+                if item_index < game_state.inventory.len() {
+                    game_state.last_player_action = "item".to_string();
+                    game_state.last_act_command = None;
+                    let item_name = game_state.inventory.remove(item_index);
                     
-                    let (healAmount, flavorText) = if let Some(info) = itemDict.0.get(&itemName) {
-                        (info.healAmount, info.text.clone())
+                    let (heal_amount, flavor_text) = if let Some(info) = item_dict.0.get(&item_name) {
+                        (info.heal_amount, info.text.clone())
                     } else {
                         (0, "...".to_string())
                     };
 
-                    let oldHp = gameState.hp;
-                    gameState.hp = (gameState.hp + healAmount as f32).min(gameState.maxHp);
-                    let recovered = (gameState.hp - oldHp) as i32;
+                    let old_hp = game_state.hp;
+                    game_state.hp = (game_state.hp + heal_amount as f32).min(game_state.max_hp);
+                    let recovered = (game_state.hp - old_hp) as i32;
 
-                    let mut text = format!("* You ate the {}.", itemName);
+                    let mut text = format!("* You ate the {}.", item_name);
 
-                    if gameState.hp >= gameState.maxHp {
+                    if game_state.hp >= game_state.max_hp {
                         text.push_str("\n* Your HP was maxed out!");
                     } else {
-                        if !flavorText.is_empty() {
-                            text.push_str(&format!("\n* {}", flavorText));
+                        if !flavor_text.is_empty() {
+                            text.push_str(&format!("\n* {}", flavor_text));
                             text.push_str(&format!("\n* You recovered {} HP!", recovered));
                         } else {
                             text.push_str(&format!("\n* You recovered {} HP!", recovered));
                         }
                     }
 
-                    gameState.myFight = 2; 
+                    game_state.my_fight = 2; 
                     
-                    for entity in menuItemsQuery.iter() { commands.entity(entity).despawn(); }
-                    if let Ok((entity, _)) = typewriterQuery.get_single_mut() { commands.entity(entity).despawn(); }
+                    for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
+                    if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
                     
                     commands.spawn((
                         Text2dBundle {
-                            text: Text::from_section("", TextStyle { font: assetServer.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
+                            text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
                             text_anchor: Anchor::TopLeft,
                             transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                             ..default()
                         },
-                        Typewriter { fullText: text, visibleChars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
+                        Typewriter { full_text: text, visible_chars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
                         MainDialogText,
                         Cleanup,
                     ));
                 }
             },
             MENU_LAYER_MERCY => {
-                let mercyIdx = gameState.menuCoords[MENU_LAYER_MERCY as usize];
-                gameState.lastActCommand = None;
-                gameState.lastPlayerAction = if mercyIdx == 0 {
+                let mercy_idx = game_state.menu_coords[MENU_LAYER_MERCY as usize];
+                game_state.last_act_command = None;
+                game_state.last_player_action = if mercy_idx == 0 {
                     "spare".to_string()
                 } else {
                     "flee".to_string()
                 };
-                let text = if mercyIdx == 0 {
+                let text = if mercy_idx == 0 {
                     "* Spare... nothing happened.".to_string()
                 } else {
                     "* Escaped...".to_string()
                 };
                 
-                gameState.myFight = 2;
-                for entity in menuItemsQuery.iter() { commands.entity(entity).despawn(); }
-                if let Ok((entity, _)) = typewriterQuery.get_single_mut() { commands.entity(entity).despawn(); }
+                game_state.my_fight = 2;
+                for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
+                if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
 
                 commands.spawn((
                     Text2dBundle {
-                        text: Text::from_section("", TextStyle { font: assetServer.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
+                        text: Text::from_section("", TextStyle { font: asset_server.load("font/8bitOperatorPlus-Bold.ttf"), font_size: 32.0, color: Color::WHITE }),
                         text_anchor: Anchor::TopLeft,
                         transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                         ..default()
                     },
-                    Typewriter { fullText: text, visibleChars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
+                    Typewriter { full_text: text, visible_chars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
                     MainDialogText,
                     Cleanup,
                 ));
@@ -561,9 +561,9 @@ pub fn menuInputSystem(
     
     if input.just_pressed(KeyCode::KeyX) {
         if layer == MENU_LAYER_FIGHT_TARGET || layer == MENU_LAYER_ACT_TARGET || layer == MENU_LAYER_ITEM || layer == MENU_LAYER_MERCY {
-            gameState.menuLayer = MENU_LAYER_TOP;
+            game_state.menu_layer = MENU_LAYER_TOP;
         } else if layer == MENU_LAYER_ACT_COMMAND {
-            gameState.menuLayer = MENU_LAYER_ACT_TARGET;
+            game_state.menu_layer = MENU_LAYER_ACT_TARGET;
         }
     }
 }

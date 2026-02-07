@@ -12,147 +12,157 @@ use crate::python_scripts;
 use crate::resources::*;
 use crate::systems::phase;
 
-pub fn battleFlowControl(
+pub fn battle_flow_control(
     mut commands: Commands,
-    mut gameState: ResMut<GameState>,
-    assetServer: Res<AssetServer>,
-    gameFonts: Res<GameFonts>,
+    mut game_state: ResMut<GameState>,
+    asset_server: Res<AssetServer>,
+    game_fonts: Res<GameFonts>,
     python_runtime: NonSend<PythonRuntime>,
     _time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>, 
-    mut boxRes: ResMut<BattleBox>,
+    mut box_res: ResMut<BattleBox>,
     bubbles: Query<Entity, With<SpeechBubble>>,
-    bubbleTextQuery: Query<&Typewriter, With<SpeechBubble>>, 
-    mut soulQuery: Query<&mut Transform, With<Soul>>,
-    mut eguiContexts: EguiContexts,
-    editorQuery: Query<Entity, With<EditorWindow>>,
+    bubble_text_query: Query<&Typewriter, With<SpeechBubble>>, 
+    mut soul_query: Query<&mut Transform, With<Soul>>,
+    mut egui_contexts: EguiContexts,
+    editor_query: Query<Entity, With<EditorWindow>>,
 ) {
-    if let Ok(editorEntity) = editorQuery.get_single() {
-        if eguiContexts.ctx_for_window_mut(editorEntity).wants_keyboard_input() {
+    if let Ok(editor_entity) = editor_query.get_single() {
+        if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
             return;
         }
     }
 
-    if gameState.mnFight == 1 {
+    if game_state.mn_fight == 1 {
         if bubbles.is_empty() {
-            gameState.turnCount += 1;
-            gameState.phaseTurn += 1;
-            if let Some(nextPhase) = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "turn", &python_runtime) {
-                if nextPhase != gameState.phaseName {
-                    gameState.phaseName = nextPhase;
-                    gameState.phaseTurn = 1;
-                    let _ = phase::applyPhaseUpdate(&mut gameState, PROJECT_NAME, "turn", &python_runtime);
+            game_state.turn_count += 1;
+            game_state.phase_turn += 1;
+            if let Some(next_phase) = phase::apply_phase_update(&mut game_state, PROJECT_NAME, "turn", &python_runtime) {
+                if next_phase != game_state.phase_name {
+                    game_state.phase_name = next_phase;
+                    game_state.phase_turn = 1;
+                    let _ = phase::apply_phase_update(&mut game_state, PROJECT_NAME, "turn", &python_runtime);
                 }
             }
 
-            boxRes.target = Rect::new(32.0, 250.0, 602.0, 385.0);
-            let bubblePos = gameState.enemyBubblePosOverride.unwrap_or(Vec2::new(320.0 + 40.0, 160.0 - 95.0));
-            let bubbleX = bubblePos.x; 
-            let bubbleY = bubblePos.y; 
-            let bubbleTexture = if gameState.enemyBubbleTexture.is_empty() {
+            box_res.target = Rect::new(32.0, 250.0, 602.0, 385.0);
+            let bubble_pos = game_state.enemy_bubble_pos_override.unwrap_or(Vec2::new(320.0 + 40.0, 160.0 - 95.0));
+            let bubble_x = bubble_pos.x; 
+            let bubble_y = bubble_pos.y; 
+            let bubble_texture = if game_state.enemy_bubble_texture.is_empty() {
                 "texture/blcon/spr_blconsm.png".to_string()
             } else {
-                gameState.enemyBubbleTexture.clone()
+                game_state.enemy_bubble_texture.clone()
             };
             commands.spawn((
                 SpriteBundle {
-                    texture: assetServer.load(bubbleTexture), 
+                    texture: asset_server.load(bubble_texture), 
                     sprite: Sprite { 
                         color: Color::WHITE, 
                         custom_size: Some(Vec2::new(100.0, 80.0)), 
                         anchor: Anchor::TopLeft, 
                         ..default() 
                     },
-                    transform: Transform::from_translation(gml_to_bevy(bubbleX, bubbleY) + Vec3::new(0.0, 0.0, Z_BUBBLE)),
+                    transform: Transform::from_translation(gml_to_bevy(bubble_x, bubble_y) + Vec3::new(0.0, 0.0, Z_BUBBLE)),
                     ..default()
                 },
                 SpeechBubble,
                 Cleanup,
             ));
-            let msg = if let Some(message) = gameState.enemyBubbleMessageOverride.take() {
+            let msg = if let Some(message) = game_state.enemy_bubble_message_override.take() {
                 message
-            } else if gameState.enemyBubbleMessages.is_empty() {
+            } else if game_state.enemy_bubble_messages.is_empty() {
                 println!("Warning: enemy bubble messages missing");
                 "...".to_string()
             } else {
-                let idx = rand::thread_rng().gen_range(0..gameState.enemyBubbleMessages.len());
-                gameState.enemyBubbleMessages[idx].clone()
+                let idx = rand::thread_rng().gen_range(0..game_state.enemy_bubble_messages.len());
+                game_state.enemy_bubble_messages[idx].clone()
             };
             commands.spawn((
                 Text2dBundle {
-                    text: Text::from_section("", TextStyle { font: gameFonts.dialog.clone(), font_size: 24.0, color: Color::BLACK }),
+                    text: Text::from_section("", TextStyle { font: game_fonts.dialog.clone(), font_size: 24.0, color: Color::BLACK }),
                     text_anchor: Anchor::TopLeft,
-                    transform: Transform::from_translation(gml_to_bevy(bubbleX + 15.0, bubbleY + 15.0) + Vec3::new(0.0, 0.0, Z_BUBBLE_TEXT)),
+                    transform: Transform::from_translation(gml_to_bevy(bubble_x + 15.0, bubble_y + 15.0) + Vec3::new(0.0, 0.0, Z_BUBBLE_TEXT)),
                     ..default()
                 },
-                Typewriter { fullText: msg, visibleChars: 0, timer: Timer::from_seconds(0.05, TimerMode::Repeating), finished: false },
+                Typewriter { full_text: msg, visible_chars: 0, timer: Timer::from_seconds(0.05, TimerMode::Repeating), finished: false },
                 SpeechBubble, 
                 Cleanup,
             ));
         }
         
-        let mut isFinished = false;
-        if let Ok(writer) = bubbleTextQuery.get_single() {
+        let mut is_finished = false;
+        if let Ok(writer) = bubble_text_query.get_single() {
             if writer.finished {
-                isFinished = true;
+                is_finished = true;
             }
         }
 
-        if isFinished && input.just_pressed(KeyCode::KeyZ) {
+        if is_finished && input.just_pressed(KeyCode::KeyZ) {
             for entity in bubbles.iter() { commands.entity(entity).despawn_recursive(); }
             
-            gameState.mnFight = 2; 
-            gameState.turnTimer = -1.0; 
+            game_state.mn_fight = 2; 
+            game_state.turn_timer = -1.0; 
             
-            boxRes.target = Rect::new(217.0, 125.0, 417.0, 385.0);
+            box_res.target = Rect::new(217.0, 125.0, 417.0, 385.0);
             
-            let boxCenterX = (217.0 + 417.0) / 2.0;
-            let boxCenterY = (125.0 + 385.0) / 2.0;
-            if let Ok(mut t) = soulQuery.get_single_mut() {
-                t.translation = gml_to_bevy(boxCenterX, boxCenterY) + Vec3::new(0.0, 0.0, Z_SOUL);
+            let box_center_x = (217.0 + 417.0) / 2.0;
+            let box_center_y = (125.0 + 385.0) / 2.0;
+            if let Ok(mut t) = soul_query.get_single_mut() {
+                t.translation = gml_to_bevy(box_center_x, box_center_y) + Vec3::new(0.0, 0.0, Z_SOUL);
             }
         }
     }
 }
 
-pub fn combatTurnManager(
+pub fn combat_turn_manager(
     mut commands: Commands,
-    assetServer: Res<AssetServer>,
+    asset_server: Res<AssetServer>,
     time: Res<Time>,
-    mut gameState: ResMut<GameState>,
-    mut battleBox: ResMut<BattleBox>,
+    mut game_state: ResMut<GameState>,
+    mut battle_box: ResMut<BattleBox>,
     python_runtime: NonSend<PythonRuntime>,
-    bulletQuery: Query<Entity, With<PythonBullet>>,
+    bullet_query: Query<Entity, With<PythonBullet>>,
     mut scripts: ResMut<DanmakuScripts>,
 ) {
-    if gameState.mnFight == 2 {
-        if gameState.turnTimer < 0.0 {
-            gameState.turnTimer = 5.0; 
+    if game_state.mn_fight == 2 {
+        if game_state.turn_timer < 0.0 {
+            game_state.turn_timer = 5.0; 
             
-            let attackPatterns = &gameState.enemyAttacks;
-            let scriptName = if !attackPatterns.is_empty() {
+            let attack_patterns = &game_state.enemy_attacks;
+            let script_name = if !attack_patterns.is_empty() {
                 let mut rng = rand::thread_rng();
-                let idx = rng.gen_range(0..attackPatterns.len());
-                attackPatterns[idx].clone()
+                let idx = rng.gen_range(0..attack_patterns.len());
+                attack_patterns[idx].clone()
             } else {
                 println!("Warning: enemyStatus attackPatterns missing");
                 "frogJump".to_string() 
             };
             
-            let scriptContent = match python_scripts::get_danmaku_script(PROJECT_NAME, &scriptName) {
-                Some(content) => content,
-                None => {
-                    println!("Warning: script missing projects/{}/danmaku/{}.py", PROJECT_NAME, scriptName);
-                    return;
+            let cached_api = scripts.modules.get("api").cloned();
+            let cached_module = scripts.modules.get(&script_name).cloned();
+            let script_content = if cached_module.is_none() {
+                match python_scripts::get_danmaku_script(PROJECT_NAME, &script_name) {
+                    Some(content) => Some(content),
+                    None => {
+                        println!("Warning: script missing projects/{}/danmaku/{}.py", PROJECT_NAME, script_name);
+                        return;
+                    }
                 }
+            } else {
+                None
             };
 
-            let apiContent = match python_scripts::get_danmaku_api_script(PROJECT_NAME) {
-                Some(content) => content,
-                None => {
-                    println!("Warning: script missing projects/{}/danmaku/api.py", PROJECT_NAME);
-                    return;
+            let api_content = if cached_api.is_none() {
+                match python_scripts::get_danmaku_api_script(PROJECT_NAME) {
+                    Some(content) => Some(content),
+                    None => {
+                        println!("Warning: script missing projects/{}/danmaku/api.py", PROJECT_NAME);
+                        return;
+                    }
                 }
+            } else {
+                None
             };
 
             python_runtime.interpreter.enter(|vm| {
@@ -173,9 +183,20 @@ pub fn combatTurnManager(
                     }
                 };
 
-                let apiModule = match run_module(apiContent, "api.py", "api") {
+                let api_module = match cached_api {
                     Some(module) => module,
-                    None => return,
+                    None => {
+                        let api_content = match api_content {
+                            Some(content) => content,
+                            None => return,
+                        };
+                        let module = match run_module(api_content, "api.py", "api") {
+                            Some(module) => module,
+                            None => return,
+                        };
+                        scripts.modules.insert("api".to_string(), module.clone());
+                        module
+                    }
                 };
 
                 let sys = match vm.import("sys", 0) {
@@ -192,31 +213,42 @@ pub fn combatTurnManager(
                         return;
                     }
                 };
-                if let Err(err) = modules.set_item("api", apiModule.clone(), vm) {
+                if let Err(err) = modules.set_item("api", api_module.clone(), vm) {
                     vm.print_exception(err.clone());
                     return;
                 }
 
-                let module = match run_module(scriptContent, &format!("{}.py", scriptName), &scriptName) {
+                let module = match cached_module {
                     Some(module) => module,
-                    None => return,
+                    None => {
+                        let script_content = match script_content {
+                            Some(content) => content,
+                            None => return,
+                        };
+                        let module = match run_module(script_content, &format!("{}.py", script_name), &script_name) {
+                            Some(module) => module,
+                            None => return,
+                        };
+                        scripts.modules.insert(script_name.clone(), module.clone());
+                        module
+                    }
                 };
 
-                let initFunc = match module.get_attr("init", vm) {
+                let init_func = match module.get_attr("init", vm) {
                     Ok(func) => func,
                     Err(err) => {
                         vm.print_exception(err.clone());
                         return;
                     }
                 };
-                let initResult = match vm.invoke(&initFunc, ()) {
+                let init_result = match vm.invoke(&init_func, ()) {
                     Ok(result) => result,
                     Err(err) => {
                         vm.print_exception(err.clone());
                         return;
                     }
                 };
-                let initData: PyDictRef = match initResult.try_into_value(vm) {
+                let init_data: PyDictRef = match init_result.try_into_value(vm) {
                     Ok(result) => result,
                     Err(err) => {
                         vm.print_exception(err.clone());
@@ -225,7 +257,7 @@ pub fn combatTurnManager(
                     }
                 };
 
-                let boxDataObj = match initData.get_item_opt("box", vm) {
+                let box_data_obj = match init_data.get_item_opt("box", vm) {
                     Ok(Some(value)) => value,
                     Ok(None) => {
                         println!("Warning: danmaku box missing");
@@ -236,7 +268,7 @@ pub fn combatTurnManager(
                         return;
                     }
                 };
-                let _boxData: Vec<f32> = match boxDataObj.try_into_value(vm) {
+                let _box_data: Vec<f32> = match box_data_obj.try_into_value(vm) {
                     Ok(value) => value,
                     Err(err) => {
                         vm.print_exception(err.clone());
@@ -244,7 +276,7 @@ pub fn combatTurnManager(
                     }
                 };
 
-                let texturePathObj = match initData.get_item_opt("textureWait", vm) {
+                let texture_path_obj = match init_data.get_item_opt("textureWait", vm) {
                     Ok(Some(value)) => value,
                     Ok(None) => {
                         println!("Warning: danmaku textureWait missing");
@@ -255,7 +287,7 @@ pub fn combatTurnManager(
                         return;
                     }
                 };
-                let texturePath: String = match texturePathObj.try_into_value(vm) {
+                let texture_path: String = match texture_path_obj.try_into_value(vm) {
                     Ok(value) => value,
                     Err(err) => {
                         vm.print_exception(err.clone());
@@ -263,17 +295,17 @@ pub fn combatTurnManager(
                     }
                 };
 
-                let spawnX = ORIGIN_X + battleBox.current.max.x - 40.0;
-                let spawnY = ORIGIN_Y - battleBox.current.max.y + 40.0;
+                let spawn_x = ORIGIN_X + battle_box.current.max.x - 40.0;
+                let spawn_y = ORIGIN_Y - battle_box.current.max.y + 40.0;
 
-                let spawnFunc = match module.get_attr("spawn", vm) {
+                let spawn_func = match module.get_attr("spawn", vm) {
                     Ok(func) => func,
                     Err(err) => {
                         vm.print_exception(err.clone());
                         return;
                     }
                 };
-                let bulletObj: PyObjectRef = match vm.invoke(&spawnFunc, ()) {
+                let bullet_obj: PyObjectRef = match vm.invoke(&spawn_func, ()) {
                     Ok(result) => result,
                     Err(err) => {
                         vm.print_exception(err.clone());
@@ -281,9 +313,9 @@ pub fn combatTurnManager(
                     }
                 };
 
-                match bulletObj.get_attr("setPos", vm) {
-                    Ok(setPos) => {
-                        if let Err(err) = vm.invoke(&setPos, (spawnX, spawnY)) {
+                match bullet_obj.get_attr("setPos", vm) {
+                    Ok(set_pos) => {
+                        if let Err(err) = vm.invoke(&set_pos, (spawn_x, spawn_y)) {
                             vm.print_exception(err.clone());
                         }
                     }
@@ -292,7 +324,7 @@ pub fn combatTurnManager(
                     }
                 }
 
-                let damage = match bulletObj.get_attr("damage", vm) {
+                let damage = match bullet_obj.get_attr("damage", vm) {
                     Ok(value) => match value.try_into_value::<i32>(vm) {
                         Ok(result) => result,
                         Err(err) => {
@@ -310,39 +342,37 @@ pub fn combatTurnManager(
 
                 commands.spawn((
                     SpriteBundle {
-                        texture: assetServer.load(texturePath),
-                        transform: Transform::from_xyz(spawnX, spawnY, 30.0).with_scale(Vec3::splat(1.0)),
+                        texture: asset_server.load(texture_path),
+                        transform: Transform::from_xyz(spawn_x, spawn_y, 30.0).with_scale(Vec3::splat(1.0)),
                         ..default()
                     },
                     PythonBullet {
-                        scriptName: scriptName.clone(),
-                        bulletData: bulletObj.clone(),
+                        script_name: script_name.clone(),
+                        bullet_data: bullet_obj.clone(),
                         damage,
                     },
                     Cleanup,
                 ));
 
-                scripts.modules.insert("api".to_string(), apiModule);
-                scripts.modules.insert(scriptName, module);
             });
         }
 
-        gameState.turnTimer -= time.delta_seconds();
+        game_state.turn_timer -= time.delta_seconds();
 
-        if gameState.turnTimer <= 0.0 {
-            for entity in bulletQuery.iter() {
+        if game_state.turn_timer <= 0.0 {
+            for entity in bullet_query.iter() {
                 commands.entity(entity).despawn();
             }
             
-            gameState.mnFight = 3;
-            gameState.turnTimer = -1.0;
+            game_state.mn_fight = 3;
+            game_state.turn_timer = -1.0;
         }
-    } else if gameState.mnFight == 3 {
-        gameState.mnFight = 0;
-        gameState.myFight = 0;
-        gameState.menuLayer = 0;
-        gameState.dialogText = gameState.enemyDialogText.clone(); 
+    } else if game_state.mn_fight == 3 {
+        game_state.mn_fight = 0;
+        game_state.my_fight = 0;
+        game_state.menu_layer = 0;
+        game_state.dialog_text = game_state.enemy_dialog_text.clone(); 
         
-        battleBox.target = Rect::new(32.0, 250.0, 602.0, 385.0);
+        battle_box.target = Rect::new(32.0, 250.0, 602.0, 385.0);
     }
 }

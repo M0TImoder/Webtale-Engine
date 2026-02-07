@@ -3,24 +3,24 @@ use bevy_egui::{egui, EguiContexts};
 use crate::components::{EditorWindow, BattleScreenPreview};
 use crate::resources::{GameState, EditorState, EditorTab, EditorPreviewTexture, DanmakuPreviewTexture, BattleBox};
 
-pub fn editorUiSystem(
+pub fn editor_ui_system(
     mut contexts: EguiContexts,
-    windowQuery: Query<Entity, (With<EditorWindow>, With<Window>)>,
-    mut gameState: ResMut<GameState>,
-    mut editorState: ResMut<EditorState>,
-    previewTexture: Res<EditorPreviewTexture>,
-    _battleBox: ResMut<BattleBox>,
-    mut bgSpriteQuery: Query<&mut Visibility, With<BattleScreenPreview>>,
-    danmakuPreviewTexture: Res<DanmakuPreviewTexture>,
+    window_query: Query<Entity, (With<EditorWindow>, With<Window>)>,
+    mut game_state: ResMut<GameState>,
+    mut editor_state: ResMut<EditorState>,
+    preview_texture: Res<EditorPreviewTexture>,
+    _battle_box: ResMut<BattleBox>,
+    mut bg_sprite_query: Query<&mut Visibility, With<BattleScreenPreview>>,
+    danmaku_preview_texture: Res<DanmakuPreviewTexture>,
 ) {
-    let Ok(editorEntity) = windowQuery.get_single() else { return };
+    let Ok(editor_entity) = window_query.get_single() else { return };
 
-    let _battleTextureId = contexts.add_image(previewTexture.0.clone());
-    let danmakuTextureId = contexts.add_image(danmakuPreviewTexture.0.clone());
-    let ctx = contexts.ctx_for_window_mut(editorEntity);
+    let _battle_texture_id = contexts.add_image(preview_texture.0.clone());
+    let danmaku_texture_id = contexts.add_image(danmaku_preview_texture.0.clone());
+    let ctx = contexts.ctx_for_window_mut(editor_entity);
 
-    for mut vis in bgSpriteQuery.iter_mut() {
-        if editorState.currentTab == EditorTab::Battle {
+    for mut vis in bg_sprite_query.iter_mut() {
+        if editor_state.current_tab == EditorTab::Battle {
             *vis = Visibility::Inherited;
         } else {
             *vis = Visibility::Hidden;
@@ -29,8 +29,8 @@ pub fn editorUiSystem(
 
     egui::TopBottomPanel::top("editor_tabs").show(ctx, |ui| {
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut editorState.currentTab, EditorTab::Battle, "Battle Screen");
-            ui.selectable_value(&mut editorState.currentTab, EditorTab::DanmakuPreview, "Danmaku Preview");
+            ui.selectable_value(&mut editor_state.current_tab, EditorTab::Battle, "Battle Screen");
+            ui.selectable_value(&mut editor_state.current_tab, EditorTab::DanmakuPreview, "Danmaku Preview");
         });
     });
 
@@ -46,35 +46,35 @@ pub fn editorUiSystem(
                     
                     ui.horizontal(|ui| {
                         ui.label("Name:");
-                        ui.text_edit_singleline(&mut gameState.name);
+                        ui.text_edit_singleline(&mut game_state.name);
                     });
 
                     ui.horizontal(|ui| {
                         ui.label("Level (LV):");
-                        let oldLv = gameState.lv;
-                        ui.add(egui::Slider::new(&mut gameState.lv, 1..=20));
+                        let old_lv = game_state.lv;
+                        ui.add(egui::Slider::new(&mut game_state.lv, 1..=20));
 
-                        if oldLv != gameState.lv {
-                            let newMaxHp = if gameState.lv >= 20 {
+                        if old_lv != game_state.lv {
+                            let new_max_hp = if game_state.lv >= 20 {
                                 99.0
                             } else {
-                                16.0 + (gameState.lv as f32 * 4.0)
+                                16.0 + (game_state.lv as f32 * 4.0)
                             };
                             
-                            let newAttack = 20.0 + ((gameState.lv - 1) as f32 * 2.0);
+                            let new_attack = 20.0 + ((game_state.lv - 1) as f32 * 2.0);
 
-                            gameState.maxHp = newMaxHp;
-                            gameState.hp = newMaxHp;
-                            gameState.attack = newAttack;
+                            game_state.max_hp = new_max_hp;
+                            game_state.hp = new_max_hp;
+                            game_state.attack = new_attack;
                         }
                     });
 
                     ui.horizontal(|ui| {
                         ui.label("Current HP:");
-                        let maxHp = gameState.maxHp;
-                        ui.add(egui::Slider::new(&mut gameState.hp, 0.0..=maxHp).step_by(1.0));
+                        let max_hp = game_state.max_hp;
+                        ui.add(egui::Slider::new(&mut game_state.hp, 0.0..=max_hp).step_by(1.0));
                     });
-                    ui.label(format!("Max HP: {}", gameState.maxHp));
+                    ui.label(format!("Max HP: {}", game_state.max_hp));
 
                     ui.separator();
 
@@ -82,17 +82,17 @@ pub fn editorUiSystem(
                     
                     ui.horizontal(|ui| {
                         ui.label("Speed:");
-                        ui.add(egui::Slider::new(&mut gameState.speed, 50.0..=400.0));
+                        ui.add(egui::Slider::new(&mut game_state.speed, 50.0..=400.0));
                     });
 
                     ui.horizontal(|ui| {
                         ui.label("Attack:");
-                        ui.add(egui::Slider::new(&mut gameState.attack, 10.0..=100.0));
+                        ui.add(egui::Slider::new(&mut game_state.attack, 10.0..=100.0));
                     });
 
                     ui.horizontal(|ui| {
                         ui.label("Invincibility (sec):");
-                        ui.add(egui::Slider::new(&mut gameState.invincibilityDuration, 0.0..=5.0));
+                        ui.add(egui::Slider::new(&mut game_state.invincibility_duration, 0.0..=5.0));
                     });
                 });
 
@@ -106,28 +106,28 @@ pub fn editorUiSystem(
             ui.allocate_space(ui.available_size());
         });
 
-    if editorState.currentTab == EditorTab::DanmakuPreview {
+    if editor_state.current_tab == EditorTab::DanmakuPreview {
         egui::Area::new("danmaku_preview_area".into())
             .fixed_pos(egui::Pos2::new(320.0, 45.0))
             .order(egui::Order::Background)
             .show(ctx, |ui| {
                 let size = egui::Vec2::new(640.0, 480.0);
-                let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(danmakuTextureId, size)));
+                let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(danmaku_texture_id, size)));
 
                  if response.clicked() || response.dragged() {
                      if let Some(pos) = response.interact_pointer_pos() {
                          
-                         let imageRect = response.rect;
-                         let relX = pos.x - imageRect.min.x;
-                         let relY = pos.y - imageRect.min.y;
+                         let image_rect = response.rect;
+                         let rel_x = pos.x - image_rect.min.x;
+                         let rel_y = pos.y - image_rect.min.y;
                          
-                         let uvX = relX / imageRect.width();
-                         let uvY = relY / imageRect.height();
+                         let uv_x = rel_x / image_rect.width();
+                         let uv_y = rel_y / image_rect.height();
                          
-                         let worldX = (uvX - 0.5) * 640.0;
-                         let worldY = (0.5 - uvY) * 480.0;
+                         let world_x = (uv_x - 0.5) * 640.0;
+                         let world_y = (0.5 - uv_y) * 480.0;
                          
-                         println!("Preview Click: World({}, {})", worldX, worldY);
+                         println!("Preview Click: World({}, {})", world_x, world_y);
                      }
                  }
             });

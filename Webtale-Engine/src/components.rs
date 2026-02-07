@@ -13,8 +13,8 @@ pub struct Soul;
 #[derive(Component)]
 pub struct ButtonVisual {
     pub index: i32,
-    pub normalTexture: Handle<Image>,
-    pub selectedTexture: Handle<Image>,
+    pub normal_texture: Handle<Image>,
+    pub selected_texture: Handle<Image>,
 }
 
 #[derive(Component)] pub struct HpBarRed;
@@ -25,26 +25,26 @@ pub struct ButtonVisual {
 
 #[derive(Component)]
 pub struct Typewriter {
-    pub fullText: String,
-    pub visibleChars: usize,
+    pub full_text: String,
+    pub visible_chars: usize,
     pub timer: Timer,
     pub finished: bool,
 }
 
 #[derive(Component)] pub struct EnemyBody; 
-#[derive(Component)] pub struct EnemyHead { pub baseY: f32, pub timer: f32 }
+#[derive(Component)] pub struct EnemyHead { pub base_y: f32, pub timer: f32 }
 #[derive(Component)] pub struct ActCommands { pub commands: Vec<String> }
 #[derive(Component)] pub struct MenuTextItem { pub layer: i32, pub index: i32 }
 #[derive(Component)] pub struct MainDialogText;
-#[derive(Component)] pub struct Vaporizing { pub scanLine: f32, pub imageHandle: Handle<Image>, pub initialY: f32 }
-#[derive(Component)] pub struct DustParticle { pub velocity: Vec3, pub timer: Timer, pub maxAlpha: f32 }
+#[derive(Component)] pub struct Vaporizing { pub scan_line: f32, pub image_handle: Handle<Image>, pub initial_y: f32 }
+#[derive(Component)] pub struct DustParticle { pub velocity: Vec3, pub timer: Timer, pub max_alpha: f32 }
 #[derive(Component)] pub struct SpeechBubble;
 #[derive(Component)] pub struct AttackTargetBox;
-#[derive(Component)] pub struct AttackBar { pub speed: f32, pub moving: bool, pub flashTimer: Timer, pub flashState: bool }
-#[derive(Component)] pub struct SliceEffect { pub timer: Timer, pub frameIndex: usize }
-#[derive(Component)] pub struct PendingDamage { pub timer: Timer, pub damage: i32, pub targetPos: Vec3 }
-#[derive(Component)] pub struct DamageNumber { pub timer: Timer, pub velocityY: f32, pub gravity: f32, pub startY: f32 }
-#[derive(Component)] pub struct EnemyHpBar { pub lifespan: Timer, pub animation: Timer, pub startWidth: f32, pub targetWidth: f32 }
+#[derive(Component)] pub struct AttackBar { pub speed: f32, pub moving: bool, pub flash_timer: Timer, pub flash_state: bool }
+#[derive(Component)] pub struct SliceEffect { pub timer: Timer, pub frame_index: usize }
+#[derive(Component)] pub struct PendingDamage { pub timer: Timer, pub damage: i32, pub target_pos: Vec3 }
+#[derive(Component)] pub struct DamageNumber { pub timer: Timer, pub velocity_y: f32, pub gravity: f32, pub start_y: f32 }
+#[derive(Component)] pub struct EnemyHpBar { pub lifespan: Timer, pub animation: Timer, pub start_width: f32, pub target_width: f32 }
 #[derive(Component)] pub struct EnemyHpBarForeground;
 #[derive(Component)] pub struct BorderVisual;
 #[derive(Component)] pub struct BackgroundVisual;
@@ -67,7 +67,7 @@ pub enum LeapFrogState {
 pub struct HeartDefeated {
     pub timer: Timer,
     pub state: HeartDefeatedState,
-    pub originalPos: Vec3,
+    pub original_pos: Vec3,
 }
 
 pub enum HeartDefeatedState {
@@ -101,8 +101,8 @@ pub struct EditorWindow;
 
 #[derive(Component)]
 pub struct PythonBullet {
-    pub scriptName: String,
-    pub bulletData: PyObjectRef,
+    pub script_name: String,
+    pub bullet_data: PyObjectRef,
     pub damage: i32,
 }
 

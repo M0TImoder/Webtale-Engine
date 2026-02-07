@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct ItemInfo {
-    pub healAmount: i32,
+    pub heal_amount: i32,
     pub attack: i32,
     pub defense: i32,
     pub text: String,
@@ -63,59 +63,59 @@ impl Default for PythonRuntime {
 #[derive(Resource)]
 pub struct GameState {
     pub hp: f32,
-    pub maxHp: f32,
+    pub max_hp: f32,
     pub lv: i32,
     pub name: String,
 
     pub speed: f32,
     pub attack: f32,
     pub defense: f32,
-    pub invincibilityDuration: f32,
+    pub invincibility_duration: f32,
 
-    pub enemyHp: i32,
-    pub enemyMaxHp: i32,
-    pub enemyAtk: i32,
-    pub enemyDef: i32,
-    pub enemyName: String,
-    pub enemyDialogText: String,
-    pub enemyActCommands: Vec<String>,
-    pub enemyActTexts: HashMap<String, String>,
-    pub enemyBubbleMessages: Vec<String>,
-    pub enemyBodyTexture: String,
-    pub enemyHeadTexture: String,
-    pub enemyHeadYOffset: f32,
-    pub enemyBaseX: f32,
-    pub enemyBaseY: f32,
-    pub enemyScale: f32,
+    pub enemy_hp: i32,
+    pub enemy_max_hp: i32,
+    pub enemy_atk: i32,
+    pub enemy_def: i32,
+    pub enemy_name: String,
+    pub enemy_dialog_text: String,
+    pub enemy_act_commands: Vec<String>,
+    pub enemy_act_texts: HashMap<String, String>,
+    pub enemy_bubble_messages: Vec<String>,
+    pub enemy_body_texture: String,
+    pub enemy_head_texture: String,
+    pub enemy_head_yoffset: f32,
+    pub enemy_base_x: f32,
+    pub enemy_base_y: f32,
+    pub enemy_scale: f32,
     
-    pub enemyAttacks: Vec<String>,
-    pub phaseName: String,
-    pub phaseTurn: i32,
-    pub turnCount: i32,
-    pub enemyBubbleTexture: String,
-    pub enemyBubbleMessageOverride: Option<String>,
-    pub enemyBubblePosOverride: Option<Vec2>,
+    pub enemy_attacks: Vec<String>,
+    pub phase_name: String,
+    pub phase_turn: i32,
+    pub turn_count: i32,
+    pub enemy_bubble_texture: String,
+    pub enemy_bubble_message_override: Option<String>,
+    pub enemy_bubble_pos_override: Option<Vec2>,
 
-    pub mnFight: i32,
-    pub myFight: i32,
+    pub mn_fight: i32,
+    pub my_fight: i32,
 
-    pub menuLayer: i32, 
-    pub menuCoords: Vec<i32>,
+    pub menu_layer: i32, 
+    pub menu_coords: Vec<i32>,
 
     pub inventory: Vec<String>,
-    pub equippedItems: Vec<String>,
-    pub itemPage: usize,
+    pub equipped_items: Vec<String>,
+    pub item_page: usize,
 
-    pub dialogText: String,
+    pub dialog_text: String,
     
-    pub bubbleTimer: Timer,
-    pub damageDisplayTimer: Timer,
+    pub bubble_timer: Timer,
+    pub damage_display_timer: Timer,
 
-    pub turnTimer: f32,
+    pub turn_timer: f32,
     
-    pub invincibilityTimer: f32,
-    pub lastPlayerAction: String,
-    pub lastActCommand: Option<String>,
+    pub invincibility_timer: f32,
+    pub last_player_action: String,
+    pub last_act_command: Option<String>,
 }
 
 #[derive(Resource)]
@@ -128,7 +128,7 @@ pub struct BattleBox {
 pub struct GameFonts {
     pub main: Handle<Font>,
     pub dialog: Handle<Font>,
-    pub hpLabel: Handle<Font>,
+    pub hp_label: Handle<Font>,
     pub damage: Handle<Font>, 
 }
 
@@ -141,7 +141,7 @@ pub enum EditorTab {
 
 #[derive(Resource, Default)]
 pub struct EditorState {
-    pub currentTab: EditorTab,
+    pub current_tab: EditorTab,
 }
 
 #[derive(Resource, Default)]

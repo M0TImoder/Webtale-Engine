@@ -8,24 +8,24 @@ use crate::constants::*;
 use crate::python_scripts;
 use crate::resources::{GameState, PythonRuntime};
 
-pub fn resolveInitialPhase(projectName: &str, requested: &str) -> String {
+pub fn resolve_initial_phase(project_name: &str, requested: &str) -> String {
     if !requested.is_empty() {
-        if python_scripts::get_phase_script(projectName, requested).is_some() {
+        if python_scripts::get_phase_script(project_name, requested).is_some() {
             return requested.to_string();
         }
-        println!("Warning: phase script missing projects/{}/phases/{}.py", projectName, requested);
+        println!("Warning: phase script missing projects/{}/phases/{}.py", project_name, requested);
     }
 
-    if python_scripts::get_phase_script(projectName, "phase1").is_some() {
+    if python_scripts::get_phase_script(project_name, "phase1").is_some() {
         return "phase1".to_string();
     }
 
-    let mut phaseNames = python_scripts::list_phase_names(projectName);
-    phaseNames.sort();
-    phaseNames.first().cloned().unwrap_or_default()
+    let mut phase_names = python_scripts::list_phase_names(project_name);
+    phase_names.sort();
+    phase_names.first().cloned().unwrap_or_default()
 }
 
-fn resolveBubbleTextureName(name: &str) -> String {
+fn resolve_bubble_texture_name(name: &str) -> String {
     match name {
         "blconabove" => "texture/blcon/spr_blconabove.png",
         "blconbelow" => "texture/blcon/spr_blconbelow.png",
@@ -45,29 +45,29 @@ fn resolveBubbleTextureName(name: &str) -> String {
     .to_string()
 }
 
-pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &str, python_runtime: &PythonRuntime) -> Option<String> {
-    if gameState.phaseName.is_empty() {
+pub fn apply_phase_update(game_state: &mut GameState, project_name: &str, trigger: &str, python_runtime: &PythonRuntime) -> Option<String> {
+    if game_state.phase_name.is_empty() {
         return None;
     }
 
-    let phaseName = gameState.phaseName.clone();
-    let scriptContent = match python_scripts::get_phase_script(projectName, &phaseName) {
+    let phase_name = game_state.phase_name.clone();
+    let script_content = match python_scripts::get_phase_script(project_name, &phase_name) {
         Some(content) => content,
         None => {
-            println!("Warning: phase script missing projects/{}/phases/{}.py", projectName, phaseName);
+            println!("Warning: phase script missing projects/{}/phases/{}.py", project_name, phase_name);
             return None;
         }
     };
 
-    let apiContent = match python_scripts::get_phase_api_script(projectName) {
+    let api_content = match python_scripts::get_phase_api_script(project_name) {
         Some(content) => content,
         None => {
-            println!("Warning: phase api missing projects/{}/phases/phase_api.py", projectName);
+            println!("Warning: phase api missing projects/{}/phases/phase_api.py", project_name);
             return None;
         }
     };
 
-    let mut nextPhase: Option<String> = None;
+    let mut next_phase: Option<String> = None;
 
     python_runtime.interpreter.enter(|vm| {
         let run_module = |code: &str, filename: &str, module_name: &str| -> Option<PyObjectRef> {
@@ -87,7 +87,7 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         };
 
-        let apiModule = match run_module(apiContent, "phase_api.py", "phase_api") {
+        let api_module = match run_module(api_content, "phase_api.py", "phase_api") {
             Some(module) => module,
             None => return,
         };
@@ -106,39 +106,39 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
                 return;
             }
         };
-        if let Err(err) = modules.set_item("phase_api", apiModule.clone(), vm) {
+        if let Err(err) = modules.set_item("phase_api", api_module.clone(), vm) {
             vm.print_exception(err.clone());
             return;
         }
 
         let context = vm.ctx.new_dict();
-        let _ = context.set_item("turn", vm.new_pyobj(gameState.turnCount), vm);
-        let _ = context.set_item("phaseTurn", vm.new_pyobj(gameState.phaseTurn), vm);
-        let _ = context.set_item("enemyHp", vm.new_pyobj(gameState.enemyHp), vm);
-        let _ = context.set_item("enemyMaxHp", vm.new_pyobj(gameState.enemyMaxHp), vm);
-        let _ = context.set_item("enemyName", vm.new_pyobj(gameState.enemyName.clone()), vm);
-        let _ = context.set_item("phase", vm.new_pyobj(phaseName.clone()), vm);
+        let _ = context.set_item("turn", vm.new_pyobj(game_state.turn_count), vm);
+        let _ = context.set_item("phaseTurn", vm.new_pyobj(game_state.phase_turn), vm);
+        let _ = context.set_item("enemyHp", vm.new_pyobj(game_state.enemy_hp), vm);
+        let _ = context.set_item("enemyMaxHp", vm.new_pyobj(game_state.enemy_max_hp), vm);
+        let _ = context.set_item("enemyName", vm.new_pyobj(game_state.enemy_name.clone()), vm);
+        let _ = context.set_item("phase", vm.new_pyobj(phase_name.clone()), vm);
         let _ = context.set_item("trigger", vm.new_pyobj(trigger), vm);
-        let _ = context.set_item("isFirstTurn", vm.new_pyobj(gameState.turnCount == 1), vm);
-        let _ = context.set_item("isPhaseStart", vm.new_pyobj(gameState.phaseTurn == 1), vm);
+        let _ = context.set_item("isFirstTurn", vm.new_pyobj(game_state.turn_count == 1), vm);
+        let _ = context.set_item("isPhaseStart", vm.new_pyobj(game_state.phase_turn == 1), vm);
         let _ = context.set_item("isStart", vm.new_pyobj(trigger == "start"), vm);
         let _ = context.set_item("isTurnStart", vm.new_pyobj(trigger == "turn"), vm);
         let _ = context.set_item("isDamageApplied", vm.new_pyobj(trigger == "damage"), vm);
-        let lastAction = if gameState.lastPlayerAction.is_empty() {
+        let last_action = if game_state.last_player_action.is_empty() {
             vm.ctx.none()
         } else {
-            gameState.lastPlayerAction.clone().to_pyobject(vm)
+            game_state.last_player_action.clone().to_pyobject(vm)
         };
-        let _ = context.set_item("lastPlayerAction", lastAction, vm);
-        let lastAct = match &gameState.lastActCommand {
+        let _ = context.set_item("lastPlayerAction", last_action, vm);
+        let last_act = match &game_state.last_act_command {
             Some(command) => command.clone().to_pyobject(vm),
             None => vm.ctx.none(),
         };
-        let _ = context.set_item("lastActCommand", lastAct, vm);
+        let _ = context.set_item("lastActCommand", last_act, vm);
 
-        match apiModule.get_attr("reset", vm) {
-            Ok(resetFunc) => {
-                if let Err(err) = vm.invoke(&resetFunc, (context.clone(),)) {
+        match api_module.get_attr("reset", vm) {
+            Ok(reset_func) => {
+                if let Err(err) = vm.invoke(&reset_func, (context.clone(),)) {
                     vm.print_exception(err.clone());
                 }
             }
@@ -147,12 +147,12 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         }
 
-        let phaseModule = match run_module(scriptContent, &format!("{}.py", phaseName), &phaseName) {
+        let phase_module = match run_module(script_content, &format!("{}.py", phase_name), &phase_name) {
             Some(module) => module,
             None => return,
         };
 
-        let updateFunc = match phaseModule.get_attr("update", vm) {
+        let update_func = match phase_module.get_attr("update", vm) {
             Ok(func) => func,
             Err(err) => {
                 vm.print_exception(err.clone());
@@ -161,7 +161,7 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         };
 
-        let updateResult = match vm.invoke(&updateFunc, (context.clone(),)) {
+        let update_result = match vm.invoke(&update_func, (context.clone(),)) {
             Ok(result) => result,
             Err(err) => {
                 vm.print_exception(err.clone());
@@ -169,7 +169,7 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         };
 
-        let readOptionString = |dict: &PyDictRef, key: &str, label: &str| -> Option<String> {
+        let read_option_string = |dict: &PyDictRef, key: &str, label: &str| -> Option<String> {
             match dict.get_item_opt(key, vm) {
                 Ok(Some(value)) => match value.try_into_value::<Option<String>>(vm) {
                     Ok(result) => result,
@@ -188,7 +188,7 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         };
 
-        let readOptionVecString = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<String>> {
+        let read_option_vec_string = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<String>> {
             match dict.get_item_opt(key, vm) {
                 Ok(Some(value)) => match value.try_into_value::<Option<Vec<String>>>(vm) {
                     Ok(result) => result,
@@ -207,7 +207,7 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         };
 
-        let readOptionVecF32 = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<f32>> {
+        let read_option_vec_f32 = |dict: &PyDictRef, key: &str, label: &str| -> Option<Vec<f32>> {
             match dict.get_item_opt(key, vm) {
                 Ok(Some(value)) => match value.try_into_value::<Option<Vec<f32>>>(vm) {
                     Ok(result) => result,
@@ -226,52 +226,52 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
             }
         };
 
-        let mut applyState = |stateDict: &PyDictRef| {
-            if let Some(dialogText) = readOptionString(stateDict, "dialogText", "phase") {
-                gameState.enemyDialogText = dialogText.clone();
-                if gameState.mnFight == 0 && gameState.myFight == 0 && gameState.menuLayer == MENU_LAYER_TOP {
-                    gameState.dialogText = dialogText;
+        let mut apply_state = |state_dict: &PyDictRef| {
+            if let Some(dialog_text) = read_option_string(state_dict, "dialogText", "phase") {
+                game_state.enemy_dialog_text = dialog_text.clone();
+                if game_state.mn_fight == 0 && game_state.my_fight == 0 && game_state.menu_layer == MENU_LAYER_TOP {
+                    game_state.dialog_text = dialog_text;
                 }
             }
 
-            if let Some(attacks) = readOptionVecString(stateDict, "attackPatterns", "phase") {
-                gameState.enemyAttacks = attacks;
+            if let Some(attacks) = read_option_vec_string(state_dict, "attackPatterns", "phase") {
+                game_state.enemy_attacks = attacks;
             }
 
-            if let Some(messages) = readOptionVecString(stateDict, "bubbleMessages", "phase") {
-                gameState.enemyBubbleMessages = messages;
+            if let Some(messages) = read_option_vec_string(state_dict, "bubbleMessages", "phase") {
+                game_state.enemy_bubble_messages = messages;
             }
 
-            if let Some(message) = readOptionString(stateDict, "bubbleMessage", "phase") {
+            if let Some(message) = read_option_string(state_dict, "bubbleMessage", "phase") {
                 if !message.is_empty() {
-                    gameState.enemyBubbleMessageOverride = Some(message);
+                    game_state.enemy_bubble_message_override = Some(message);
                 }
             }
 
-            if let Some(texture) = readOptionString(stateDict, "bubbleTexture", "phase") {
-                gameState.enemyBubbleTexture = resolveBubbleTextureName(&texture);
+            if let Some(texture) = read_option_string(state_dict, "bubbleTexture", "phase") {
+                game_state.enemy_bubble_texture = resolve_bubble_texture_name(&texture);
             }
 
-            if let Some(pos) = readOptionVecF32(stateDict, "bubblePosition", "phase") {
+            if let Some(pos) = read_option_vec_f32(state_dict, "bubblePosition", "phase") {
                 if pos.len() == 2 {
-                    gameState.enemyBubblePosOverride = Some(Vec2::new(pos[0], pos[1]));
+                    game_state.enemy_bubble_pos_override = Some(Vec2::new(pos[0], pos[1]));
                 } else {
                     println!("Warning: phase bubblePosition invalid");
                 }
             }
 
-            nextPhase = readOptionString(stateDict, "nextPhase", "phase");
+            next_phase = read_option_string(state_dict, "nextPhase", "phase");
         };
 
-        if let Ok(dict) = updateResult.try_into_value::<PyDictRef>(vm) {
-            applyState(&dict);
+        if let Ok(dict) = update_result.try_into_value::<PyDictRef>(vm) {
+            apply_state(&dict);
             return;
         }
 
-        match apiModule.get_attr("getState", vm) {
-            Ok(getState) => match vm.invoke(&getState, ()) {
-                Ok(stateResult) => match stateResult.try_into_value::<PyDictRef>(vm) {
-                    Ok(dict) => applyState(&dict),
+        match api_module.get_attr("getState", vm) {
+            Ok(get_state) => match vm.invoke(&get_state, ()) {
+                Ok(state_result) => match state_result.try_into_value::<PyDictRef>(vm) {
+                    Ok(dict) => apply_state(&dict),
                     Err(err) => vm.print_exception(err),
                 },
                 Err(err) => vm.print_exception(err),
@@ -280,5 +280,5 @@ pub fn applyPhaseUpdate(gameState: &mut GameState, projectName: &str, trigger: &
         }
     });
 
-    nextPhase
+    next_phase
 }

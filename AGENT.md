@@ -21,14 +21,14 @@
   const float damageMagnification = 1.0;
   ```
 
-2. 命名法は簡潔かつロワーキャメル法に統一する必要がある
+2. 命名法は簡潔かつスネークケースに統一する必要がある
 
   ```悪い例
-  Damage_Magnification_Of_Enemy
+  enemyDamageMagnification
   ```
 
   ```いい例
-  enemyDamageMag
+  enemy_damage_mag
   ```
 
 3. エラーが解決するまで継続してコードを改善すること
