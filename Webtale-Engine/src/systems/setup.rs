@@ -43,55 +43,58 @@ pub fn setup(
 }
 
 pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, game_fonts: &GameFonts, python_runtime: &PythonRuntime) {
-    let mut game_state = GameState {
+    let mut player_state = PlayerState {
         hp: 0.0,
         max_hp: 0.0,
         lv: 1,
         name: String::new(),
-        
         speed: 0.0,
         attack: 0.0,
         defense: 0.0,
         invincibility_duration: 0.0,
+        invincibility_timer: 0.0,
+        inventory: vec![],
+        equipped_items: vec![],
+    };
 
-        enemy_hp: 0,
-        enemy_max_hp: 0,
-        enemy_atk: 0,
-        enemy_def: 0,
-        enemy_name: String::new(),
-        enemy_dialog_text: String::new(),
-        enemy_act_commands: vec![],
-        enemy_act_texts: HashMap::new(),
-        enemy_bubble_messages: vec![],
-        enemy_body_texture: String::new(),
-        enemy_head_texture: String::new(),
-        enemy_head_yoffset: 0.0,
-        enemy_base_x: 0.0,
-        enemy_base_y: 0.0,
-        enemy_scale: 1.0,
-        enemy_attacks: vec![],
+    let mut enemy_state = EnemyState {
+        hp: 0,
+        max_hp: 0,
+        atk: 0,
+        def: 0,
+        name: String::new(),
+        dialog_text: String::new(),
+        act_commands: vec![],
+        act_texts: HashMap::new(),
+        bubble_messages: vec![],
+        body_texture: String::new(),
+        head_texture: String::new(),
+        head_yoffset: 0.0,
+        base_x: 0.0,
+        base_y: 0.0,
+        scale: 1.0,
+        attacks: vec![],
+        bubble_texture: "texture/blcon/spr_blconsm.png".to_string(),
+        bubble_message_override: None,
+        bubble_pos_override: None,
+    };
+
+    let mut menu_state = MenuState {
+        menu_layer: MENU_LAYER_TOP,
+        menu_coords: vec![0; 11],
+        item_page: 0,
+        dialog_text: String::new(),
+    };
+
+    let mut combat_state = CombatState {
+        mn_fight: 0,
+        my_fight: 0,
         phase_name: String::new(),
         phase_turn: 0,
         turn_count: 0,
-        enemy_bubble_texture: "texture/blcon/spr_blconsm.png".to_string(),
-        enemy_bubble_message_override: None,
-        enemy_bubble_pos_override: None,
-
-        mn_fight: 0, 
-        my_fight: 0,
-        menu_layer: MENU_LAYER_TOP,
-        menu_coords: vec![0; 11],
-
-        inventory: vec![],
-        equipped_items: vec![],
-        item_page: 0,
-        
-        dialog_text: String::new(),
-        
+        turn_timer: -1.0,
         bubble_timer: Timer::from_seconds(3.0, TimerMode::Once),
         damage_display_timer: Timer::from_seconds(1.0, TimerMode::Once),
-        turn_timer: -1.0,
-        invincibility_timer: 0.0,
         last_player_action: String::new(),
         last_act_command: None,
     };
@@ -276,34 +279,34 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
                         Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
                             Ok(dict) => {
                                 if let Some(name) = read_string(&dict, "name", "playerStatus") {
-                                    game_state.name = name;
+                                    player_state.name = name;
                                 }
                                 if let Some(lv) = read_i32(&dict, "lv", "playerStatus") {
-                                    game_state.lv = lv;
+                                    player_state.lv = lv;
                                 }
                                 if let Some(max_hp) = read_f32(&dict, "maxHp", "playerStatus") {
-                                    game_state.max_hp = max_hp;
+                                    player_state.max_hp = max_hp;
                                 }
                                 if let Some(hp) = read_f32(&dict, "hp", "playerStatus") {
-                                    game_state.hp = hp;
+                                    player_state.hp = hp;
                                 }
                                 if let Some(speed) = read_f32(&dict, "speed", "playerStatus") {
-                                    game_state.speed = speed;
+                                    player_state.speed = speed;
                                 }
                                 if let Some(attack) = read_f32(&dict, "attack", "playerStatus") {
-                                    game_state.attack = attack;
+                                    player_state.attack = attack;
                                 }
                                 if let Some(defense) = read_f32(&dict, "defense", "playerStatus") {
-                                    game_state.defense = defense;
+                                    player_state.defense = defense;
                                 }
                                 if let Some(inv_dur) = read_f32(&dict, "invincibilityDuration", "playerStatus") {
-                                    game_state.invincibility_duration = inv_dur;
+                                    player_state.invincibility_duration = inv_dur;
                                 }
                                 if let Some(inventory) = read_vec_string(&dict, "inventory", "playerStatus") {
-                                    game_state.inventory = inventory;
+                                    player_state.inventory = inventory;
                                 }
                                 if let Some(equipped_items) = read_vec_string(&dict, "equippedItems", "playerStatus") {
-                                    game_state.equipped_items = equipped_items;
+                                    player_state.equipped_items = equipped_items;
                                 }
                             }
                             Err(err) => {
@@ -339,31 +342,31 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
                         Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
                             Ok(dict) => {
                                 if let Some(hp) = read_i32(&dict, "enemyHp", "enemyStatus") {
-                                    game_state.enemy_hp = hp;
+                                    enemy_state.hp = hp;
                                 }
                                 if let Some(max_hp) = read_i32(&dict, "enemyMaxHp", "enemyStatus") {
-                                    game_state.enemy_max_hp = max_hp;
+                                    enemy_state.max_hp = max_hp;
                                 }
                                 if let Some(atk) = read_i32(&dict, "enemyAtk", "enemyStatus") {
-                                    game_state.enemy_atk = atk;
+                                    enemy_state.atk = atk;
                                 }
                                 if let Some(def) = read_i32(&dict, "enemyDef", "enemyStatus") {
-                                    game_state.enemy_def = def;
+                                    enemy_state.def = def;
                                 }
                                 if let Some(name) = read_string(&dict, "enemyName", "enemyStatus") {
-                                    game_state.enemy_name = name;
+                                    enemy_state.name = name;
                                 }
                                 if let Some(dialog_text) = read_string(&dict, "dialogText", "enemyStatus") {
-                                    game_state.enemy_dialog_text = dialog_text;
+                                    enemy_state.dialog_text = dialog_text;
                                 }
                                 if let Some(phase_script) = read_string(&dict, "phaseScript", "enemyStatus") {
                                     phase_script_name = phase_script;
                                 }
                                 if let Some(attacks) = read_vec_string(&dict, "attackPatterns", "enemyStatus") {
-                                    game_state.enemy_attacks = attacks;
+                                    enemy_state.attacks = attacks;
                                 }
                                 if let Some(commands) = read_vec_string(&dict, "actCommands", "enemyStatus") {
-                                    game_state.enemy_act_commands = commands;
+                                    enemy_state.act_commands = commands;
                                 }
                                 match dict.get_item_opt("actTexts", vm) {
                                     Ok(Some(act_texts_obj)) => match act_texts_obj.try_into_value::<PyDictRef>(vm) {
@@ -385,7 +388,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
                                                         continue;
                                                     }
                                                 };
-                                                game_state.enemy_act_texts.insert(command, text);
+                                                enemy_state.act_texts.insert(command, text);
                                             }
                                         }
                                         Err(err) => {
@@ -400,25 +403,25 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
                                     }
                                 }
                                 if let Some(messages) = read_vec_string(&dict, "bubbleMessages", "enemyStatus") {
-                                    game_state.enemy_bubble_messages = messages;
+                                    enemy_state.bubble_messages = messages;
                                 }
                                 if let Some(body_texture) = read_string(&dict, "bodyTexture", "enemyStatus") {
-                                    game_state.enemy_body_texture = body_texture;
+                                    enemy_state.body_texture = body_texture;
                                 }
                                 if let Some(head_texture) = read_string(&dict, "headTexture", "enemyStatus") {
-                                    game_state.enemy_head_texture = head_texture;
+                                    enemy_state.head_texture = head_texture;
                                 }
                                 if let Some(head_yoffset) = read_f32(&dict, "headYOffset", "enemyStatus") {
-                                    game_state.enemy_head_yoffset = head_yoffset;
+                                    enemy_state.head_yoffset = head_yoffset;
                                 }
                                 if let Some(base_x) = read_f32(&dict, "baseX", "enemyStatus") {
-                                    game_state.enemy_base_x = base_x;
+                                    enemy_state.base_x = base_x;
                                 }
                                 if let Some(base_y) = read_f32(&dict, "baseY", "enemyStatus") {
-                                    game_state.enemy_base_y = base_y;
+                                    enemy_state.base_y = base_y;
                                 }
                                 if let Some(scale) = read_f32(&dict, "scale", "enemyStatus") {
-                                    game_state.enemy_scale = scale;
+                                    enemy_state.scale = scale;
                                 }
                             }
                             Err(err) => {
@@ -441,72 +444,72 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         }
     });
 
-    if game_state.name.is_empty() {
+    if player_state.name.is_empty() {
         println!("Warning: playerStatus missing name");
     }
 
-    if game_state.max_hp <= 0.0 {
+    if player_state.max_hp <= 0.0 {
         println!("Warning: playerStatus maxHp invalid");
-        game_state.max_hp = 1.0;
+        player_state.max_hp = 1.0;
     }
 
-    if game_state.hp <= 0.0 {
+    if player_state.hp <= 0.0 {
         println!("Warning: playerStatus hp invalid");
-        game_state.hp = game_state.max_hp;
+        player_state.hp = player_state.max_hp;
     }
 
-    if game_state.speed <= 0.0 {
+    if player_state.speed <= 0.0 {
         println!("Warning: playerStatus speed invalid");
     }
 
-    if game_state.invincibility_duration <= 0.0 {
+    if player_state.invincibility_duration <= 0.0 {
         println!("Warning: playerStatus invincibilityDuration invalid");
     }
 
-    if game_state.enemy_max_hp <= 0 {
+    if enemy_state.max_hp <= 0 {
         println!("Warning: enemyMaxHp invalid");
-        game_state.enemy_max_hp = 1;
+        enemy_state.max_hp = 1;
     }
 
-    if game_state.enemy_name.is_empty() {
+    if enemy_state.name.is_empty() {
         println!("Warning: enemyStatus missing enemyName");
     }
 
-    if game_state.enemy_body_texture.is_empty() {
+    if enemy_state.body_texture.is_empty() {
         println!("Warning: enemyStatus missing bodyTexture");
     }
 
-    if game_state.enemy_head_texture.is_empty() {
+    if enemy_state.head_texture.is_empty() {
         println!("Warning: enemyStatus missing headTexture");
     }
 
-    game_state.phase_name = phase::resolve_initial_phase(project_name, &phase_script_name);
-    if !game_state.phase_name.is_empty() {
-        if let Some(next_phase) = phase::apply_phase_update(&mut game_state, project_name, "start", python_runtime) {
-            if next_phase != game_state.phase_name {
-                game_state.phase_name = next_phase;
-                game_state.phase_turn = 0;
-                let _ = phase::apply_phase_update(&mut game_state, project_name, "start", python_runtime);
+    combat_state.phase_name = phase::resolve_initial_phase(project_name, &phase_script_name);
+    if !combat_state.phase_name.is_empty() {
+        if let Some(next_phase) = phase::apply_phase_update(&mut enemy_state, &mut combat_state, &mut menu_state, project_name, "start", python_runtime) {
+            if next_phase != combat_state.phase_name {
+                combat_state.phase_name = next_phase;
+                combat_state.phase_turn = 0;
+                let _ = phase::apply_phase_update(&mut enemy_state, &mut combat_state, &mut menu_state, project_name, "start", python_runtime);
             }
         }
     }
 
-    if !game_state.enemy_dialog_text.is_empty() {
-        game_state.dialog_text = game_state.enemy_dialog_text.clone();
+    if !enemy_state.dialog_text.is_empty() {
+        menu_state.dialog_text = enemy_state.dialog_text.clone();
     }
 
-    let enemy_base_x = game_state.enemy_base_x; 
-    let enemy_base_y = game_state.enemy_base_y; 
-    let enemy_scale = if game_state.enemy_scale <= 0.0 {
+    let enemy_base_x = enemy_state.base_x; 
+    let enemy_base_y = enemy_state.base_y; 
+    let enemy_scale = if enemy_state.scale <= 0.0 {
         println!("Warning: enemyStatus scale invalid");
         1.0
     } else {
-        game_state.enemy_scale
+        enemy_state.scale
     }; 
 
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load(&game_state.enemy_body_texture),
+            texture: asset_server.load(&enemy_state.body_texture),
             sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
                 translation: gml_to_bevy(enemy_base_x, enemy_base_y) + Vec3::new(0.0, 0.0, Z_ENEMY_BODY),
@@ -517,16 +520,16 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
         },
         EnemyBody, 
         ActCommands {
-            commands: game_state.enemy_act_commands.clone(),
+            commands: enemy_state.act_commands.clone(),
         },
         Cleanup,
     ));
 
-    let head_yoffset = game_state.enemy_head_yoffset; 
+    let head_yoffset = enemy_state.head_yoffset; 
     let head_pos = gml_to_bevy(enemy_base_x, enemy_base_y - head_yoffset);
     commands.spawn((
         SpriteBundle {
-            texture: asset_server.load(&game_state.enemy_head_texture),
+            texture: asset_server.load(&enemy_state.head_texture),
             sprite: Sprite { color: Color::WHITE, custom_size: None, ..default() },
             transform: Transform {
                 translation: head_pos + Vec3::new(0.0, 0.0, Z_ENEMY_HEAD),
@@ -598,7 +601,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section(&game_state.name, font_style.clone()),
+            text: Text::from_section(&player_state.name, font_style.clone()),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(30.0, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
@@ -610,7 +613,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     let lv_x = 30.0 + 85.0 + 15.0; 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section(format!("LV {}", game_state.lv), font_style.clone()),
+            text: Text::from_section(format!("LV {}", player_state.lv), font_style.clone()),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(lv_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)), 
             ..default()
@@ -655,7 +658,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     let hp_text_x = 250.0 + 24.0 + 15.0;
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section(format!("{:.0} / {:.0}", game_state.hp, game_state.max_hp), font_style),
+            text: Text::from_section(format!("{:.0} / {:.0}", player_state.hp, player_state.max_hp), font_style),
             text_anchor: Anchor::TopLeft,
             transform: Transform::from_translation(gml_to_bevy(hp_text_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
             ..default()
@@ -672,7 +675,7 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
             ..default()
         },
         Typewriter { 
-            full_text: game_state.dialog_text.clone(), 
+            full_text: menu_state.dialog_text.clone(), 
             visible_chars: 0, 
             timer: Timer::from_seconds(0.03, TimerMode::Repeating), 
             finished: false 
@@ -682,7 +685,10 @@ pub fn spawn_game_objects(commands: &mut Commands, asset_server: &AssetServer, g
     ));
 
     commands.insert_resource(item_dictionary);
-    commands.insert_resource(game_state);
+    commands.insert_resource(player_state);
+    commands.insert_resource(enemy_state);
+    commands.insert_resource(menu_state);
+    commands.insert_resource(combat_state);
 }
 
 pub fn camera_scaling_system(

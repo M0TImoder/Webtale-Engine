@@ -5,22 +5,23 @@ use crate::resources::*;
 use crate::constants::*;
 
 pub fn soul_position_sync(
-    game_state: Res<GameState>,
+    combat_state: Res<CombatState>,
+    menu_state: Res<MenuState>,
     mut soul_query: Query<&mut Transform, With<Soul>>,
 ) {
-    if (game_state.mn_fight != 0 && game_state.mn_fight != 2) || game_state.my_fight != 0 { 
+    if (combat_state.mn_fight != 0 && combat_state.mn_fight != 2) || combat_state.my_fight != 0 { 
         if let Ok(mut t) = soul_query.get_single_mut() {
             t.translation = gml_to_bevy(-200.0, 0.0); 
         }
         return; 
     }
     
-    if game_state.mn_fight == 2 {
+    if combat_state.mn_fight == 2 {
         return;
     }
 
     let mut transform = soul_query.single_mut();
-    let layer = game_state.menu_layer;
+    let layer = menu_state.menu_layer;
     
     let text_start_x = 68.0; 
     let text_start_y = 270.0 + 16.0;
@@ -28,7 +29,7 @@ pub fn soul_position_sync(
     if layer == MENU_LAYER_TOP {
         let offset_x = 8.0 + 8.0; 
         let offset_y = 14.0 + 8.0; 
-        let current_btn_idx = game_state.menu_coords[MENU_LAYER_TOP as usize];
+        let current_btn_idx = menu_state.menu_coords[MENU_LAYER_TOP as usize];
         
         let target_x = match current_btn_idx {
             0 => BTN_FIGHT_X, 1 => BTN_ACT_X, 2 => BTN_ITEM_X, 3 => BTN_MERCY_X, _ => 0.0,
@@ -41,7 +42,7 @@ pub fn soul_position_sync(
         transform.translation = pos + Vec3::new(0.0, 0.0, Z_SOUL);
 
     } else if layer == MENU_LAYER_ACT_COMMAND || layer == MENU_LAYER_ITEM {
-        let idx = game_state.menu_coords[layer as usize] as usize;
+        let idx = menu_state.menu_coords[layer as usize] as usize;
         let col = idx % 2;
         let row = idx / 2;
         let x_offset = if col == 0 { 0.0 } else { 240.0 };
@@ -51,7 +52,7 @@ pub fn soul_position_sync(
         transform.translation = pos + Vec3::new(0.0, 0.0, Z_SOUL);
 
     } else if layer == MENU_LAYER_MERCY {
-        let idx = game_state.menu_coords[layer as usize] as usize;
+        let idx = menu_state.menu_coords[layer as usize] as usize;
         let y_offset = (idx as f32) * 32.0;
         let pos = gml_to_bevy(text_start_x, text_start_y + y_offset);
         transform.translation = pos + Vec3::new(0.0, 0.0, Z_SOUL);
@@ -61,7 +62,8 @@ pub fn soul_position_sync(
 pub fn soul_combat_movement(
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
-    game_state: Res<GameState>,
+    combat_state: Res<CombatState>,
+    player_state: Res<PlayerState>,
     battle_box: Res<BattleBox>,
     mut query: Query<&mut Transform, With<Soul>>,
     mut egui_contexts: EguiContexts,
@@ -80,11 +82,11 @@ pub fn soul_combat_movement(
         }
     }
 
-    if game_state.mn_fight != 2 { return; }
+    if combat_state.mn_fight != 2 { return; }
 
     let mut transform = query.single_mut();
     
-    let speed = game_state.speed;
+    let speed = player_state.speed;
     
     let delta = speed * time.delta_seconds();
     let mut move_vec = Vec3::ZERO;

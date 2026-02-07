@@ -13,7 +13,7 @@ use bevy::sprite::Anchor;
 use crate::components::*;
 use crate::resources::*;
 use crate::constants::*;
-use crate::systems::setup::spawn_game_objects; 
+use crate::systems::setup::spawn_game_objects;
 
 fn spawn_editor_window(
     commands: &mut Commands,
@@ -308,7 +308,10 @@ pub fn menu_input_system(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     input: Res<ButtonInput<KeyCode>>,
-    mut game_state: ResMut<GameState>,
+    mut player_state: ResMut<PlayerState>,
+    enemy_state: Res<EnemyState>,
+    mut menu_state: ResMut<MenuState>,
+    mut combat_state: ResMut<CombatState>,
     mut typewriter_query: Query<(Entity, &mut Typewriter), With<MainDialogText>>,
     act_commands_query: Query<&ActCommands, With<EnemyBody>>,
     menu_items_query: Query<Entity, With<MenuTextItem>>,
@@ -316,7 +319,7 @@ pub fn menu_input_system(
     editor_query: Query<Entity, (With<EditorWindow>, With<Window>)>,
     editor_state: Option<Res<EditorState>>,
     item_dict: Res<ItemDictionary>,
-) {
+){
     if let Ok(editor_entity) = editor_query.get_single() {
         if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
             return;
@@ -329,83 +332,83 @@ pub fn menu_input_system(
         }
     }
 
-    if game_state.mn_fight != 0 || game_state.my_fight != 0 { return; }
-    let layer = game_state.menu_layer;
-    let cursor_idx = game_state.menu_coords[layer as usize] as usize;
+    if combat_state.mn_fight != 0 || combat_state.my_fight != 0 { return; }
+    let layer = menu_state.menu_layer;
+    let cursor_idx = menu_state.menu_coords[layer as usize] as usize;
     
     if input.just_pressed(KeyCode::ArrowLeft) || input.just_pressed(KeyCode::KeyA) {
         if layer == MENU_LAYER_TOP {
-            game_state.menu_coords[layer as usize] = (game_state.menu_coords[layer as usize] - 1 + 4) % 4;
+            menu_state.menu_coords[layer as usize] = (menu_state.menu_coords[layer as usize] - 1 + 4) % 4;
         } else if layer == MENU_LAYER_ACT_COMMAND {
-             if cursor_idx % 2 == 1 { game_state.menu_coords[layer as usize] -= 1; }
+             if cursor_idx % 2 == 1 { menu_state.menu_coords[layer as usize] -= 1; }
         } else if layer == MENU_LAYER_ITEM {
             if cursor_idx % 2 == 1 { 
-                game_state.menu_coords[layer as usize] -= 1; 
-            } else if game_state.item_page > 0 {
-                game_state.item_page -= 1;
-                game_state.menu_coords[layer as usize] += 1; 
+                menu_state.menu_coords[layer as usize] -= 1; 
+            } else if menu_state.item_page > 0 {
+                menu_state.item_page -= 1;
+                menu_state.menu_coords[layer as usize] += 1; 
             }
         }
     }
     if input.just_pressed(KeyCode::ArrowRight) || input.just_pressed(KeyCode::KeyD) {
         if layer == MENU_LAYER_TOP {
-            game_state.menu_coords[layer as usize] = (game_state.menu_coords[layer as usize] + 1) % 4;
+            menu_state.menu_coords[layer as usize] = (menu_state.menu_coords[layer as usize] + 1) % 4;
         } else if layer == MENU_LAYER_ACT_COMMAND {
              if cursor_idx % 2 == 0 {
                  if let Some(acts) = act_commands_query.iter().next() {
-                     if cursor_idx + 1 < acts.commands.len() { game_state.menu_coords[layer as usize] += 1; }
+                     if cursor_idx + 1 < acts.commands.len() { menu_state.menu_coords[layer as usize] += 1; }
                  }
              }
         } else if layer == MENU_LAYER_ITEM {
-            let items_on_page = game_state.inventory.len().saturating_sub(game_state.item_page * ITEMS_PER_PAGE).min(ITEMS_PER_PAGE);
+            let items_on_page = player_state.inventory.len().saturating_sub(menu_state.item_page * ITEMS_PER_PAGE).min(ITEMS_PER_PAGE);
             if cursor_idx % 2 == 0 && cursor_idx + 1 < items_on_page {
-                game_state.menu_coords[layer as usize] += 1;
-            } else if cursor_idx % 2 == 1 && (game_state.item_page + 1) * ITEMS_PER_PAGE < game_state.inventory.len() {
-                game_state.item_page += 1;
-                game_state.menu_coords[layer as usize] -= 1; 
+                menu_state.menu_coords[layer as usize] += 1;
+            } else if cursor_idx % 2 == 1 && (menu_state.item_page + 1) * ITEMS_PER_PAGE < player_state.inventory.len() {
+                menu_state.item_page += 1;
+                menu_state.menu_coords[layer as usize] -= 1; 
             }
         }
     }
     if input.just_pressed(KeyCode::ArrowUp) || input.just_pressed(KeyCode::KeyW) {
-         if layer == MENU_LAYER_ACT_COMMAND && cursor_idx >= 2 { game_state.menu_coords[layer as usize] -= 2; }
-         else if layer == MENU_LAYER_ITEM && cursor_idx >= 2 { game_state.menu_coords[layer as usize] -= 2; }
-         else if layer == MENU_LAYER_MERCY && cursor_idx > 0 { game_state.menu_coords[layer as usize] -= 1; }
+         if layer == MENU_LAYER_ACT_COMMAND && cursor_idx >= 2 { menu_state.menu_coords[layer as usize] -= 2; }
+         else if layer == MENU_LAYER_ITEM && cursor_idx >= 2 { menu_state.menu_coords[layer as usize] -= 2; }
+         else if layer == MENU_LAYER_MERCY && cursor_idx > 0 { menu_state.menu_coords[layer as usize] -= 1; }
     }
     if input.just_pressed(KeyCode::ArrowDown) || input.just_pressed(KeyCode::KeyS) {
          if layer == MENU_LAYER_ACT_COMMAND {
             if let Some(acts) = act_commands_query.iter().next() {
-                 if cursor_idx + 2 < acts.commands.len() { game_state.menu_coords[layer as usize] += 2; }
+                 if cursor_idx + 2 < acts.commands.len() { menu_state.menu_coords[layer as usize] += 2; }
             }
          } else if layer == MENU_LAYER_ITEM {
-            let items_on_page = game_state.inventory.len().saturating_sub(game_state.item_page * ITEMS_PER_PAGE).min(ITEMS_PER_PAGE);
-            if cursor_idx + 2 < items_on_page { game_state.menu_coords[layer as usize] += 2; }
+            let items_on_page = player_state.inventory.len().saturating_sub(menu_state.item_page * ITEMS_PER_PAGE).min(ITEMS_PER_PAGE);
+            if cursor_idx + 2 < items_on_page { menu_state.menu_coords[layer as usize] += 2; }
          } else if layer == MENU_LAYER_MERCY {
-             if cursor_idx < 1 { game_state.menu_coords[layer as usize] += 1; }
+             if cursor_idx < 1 { menu_state.menu_coords[layer as usize] += 1; }
          }
     }
 
     if input.just_pressed(KeyCode::KeyZ) {
         match layer {
             MENU_LAYER_TOP => {
-                let selected = game_state.menu_coords[MENU_LAYER_TOP as usize];
+                let selected = menu_state.menu_coords[MENU_LAYER_TOP as usize];
                 match selected {
-                    0 => { game_state.menu_layer = MENU_LAYER_FIGHT_TARGET; game_state.menu_coords[MENU_LAYER_FIGHT_TARGET as usize] = 0; },
-                    1 => { game_state.menu_layer = MENU_LAYER_ACT_TARGET; game_state.menu_coords[MENU_LAYER_ACT_TARGET as usize] = 0; },
+                    0 => { menu_state.menu_layer = MENU_LAYER_FIGHT_TARGET; menu_state.menu_coords[MENU_LAYER_FIGHT_TARGET as usize] = 0; },
+                    1 => { menu_state.menu_layer = MENU_LAYER_ACT_TARGET; menu_state.menu_coords[MENU_LAYER_ACT_TARGET as usize] = 0; },
                     2 => { 
-                        if !game_state.inventory.is_empty() {
-                            game_state.menu_layer = MENU_LAYER_ITEM; 
-                            game_state.menu_coords[MENU_LAYER_ITEM as usize] = 0; 
-                            game_state.item_page = 0;
+                        if !player_state.inventory.is_empty() {
+                            menu_state.menu_layer = MENU_LAYER_ITEM; 
+                            menu_state.menu_coords[MENU_LAYER_ITEM as usize] = 0; 
+                            menu_state.item_page = 0;
                         }
                     }, 
-                    3 => { game_state.menu_layer = MENU_LAYER_MERCY; game_state.menu_coords[MENU_LAYER_MERCY as usize] = 0; }, 
+                    3 => { menu_state.menu_layer = MENU_LAYER_MERCY; menu_state.menu_coords[MENU_LAYER_MERCY as usize] = 0; }, 
                     _ => {}
                 }
             },
             MENU_LAYER_FIGHT_TARGET => {
-                game_state.last_player_action = "attack".to_string();
-                game_state.last_act_command = None;
-                game_state.mn_fight = 4; 
+                combat_state.last_player_action = "attack".to_string();
+                combat_state.last_act_command = None;
+                combat_state.mn_fight = 4; 
                 let box_center = gml_to_bevy(32.0 + (602.0-32.0)/2.0, 250.0 + (385.0-250.0)/2.0);
                 commands.spawn((
                     SpriteBundle {
@@ -433,33 +436,33 @@ pub fn menu_input_system(
                 if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
             },
             MENU_LAYER_ACT_TARGET => {
-                game_state.menu_layer = MENU_LAYER_ACT_COMMAND;
-                game_state.menu_coords[MENU_LAYER_ACT_COMMAND as usize] = 0;
+                menu_state.menu_layer = MENU_LAYER_ACT_COMMAND;
+                menu_state.menu_coords[MENU_LAYER_ACT_COMMAND as usize] = 0;
             },
             MENU_LAYER_ACT_COMMAND => {
-                let act_idx = game_state.menu_coords[MENU_LAYER_ACT_COMMAND as usize] as usize;
+                let act_idx = menu_state.menu_coords[MENU_LAYER_ACT_COMMAND as usize] as usize;
                 let mut text_to_display = "* You did something.".to_string();
                 if let Some(acts) = act_commands_query.iter().next() {
                     if act_idx < acts.commands.len() {
                         let cmd_name = &acts.commands[act_idx];
-                        game_state.last_player_action = "act".to_string();
-                        game_state.last_act_command = Some(cmd_name.clone());
-                        if let Some(text) = game_state.enemy_act_texts.get(cmd_name) {
+                        combat_state.last_player_action = "act".to_string();
+                        combat_state.last_act_command = Some(cmd_name.clone());
+                        if let Some(text) = enemy_state.act_texts.get(cmd_name) {
                             text_to_display = text.clone();
                         } else if cmd_name == "Check" {
-                            let enemy_name = if game_state.enemy_name.is_empty() { "ENEMY".to_string() } else { game_state.enemy_name.to_uppercase() };
+                            let enemy_name = if enemy_state.name.is_empty() { "ENEMY".to_string() } else { enemy_state.name.to_uppercase() };
                             text_to_display = format!(
                                 "* {} - ATK {} DEF {}\n* ...",
                                 enemy_name,
-                                game_state.enemy_atk,
-                                game_state.enemy_def
+                                enemy_state.atk,
+                                enemy_state.def
                             );
                         }
                     }
                 }
                 
-                game_state.my_fight = 2; 
-                game_state.dialog_text = text_to_display.clone();
+                combat_state.my_fight = 2; 
+                menu_state.dialog_text = text_to_display.clone();
                 
                 for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
                 if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
@@ -477,12 +480,12 @@ pub fn menu_input_system(
                 ));
             },
             MENU_LAYER_ITEM => {
-                let item_index = (game_state.item_page * ITEMS_PER_PAGE) + game_state.menu_coords[MENU_LAYER_ITEM as usize] as usize;
+                let item_index = (menu_state.item_page * ITEMS_PER_PAGE) + menu_state.menu_coords[MENU_LAYER_ITEM as usize] as usize;
                 
-                if item_index < game_state.inventory.len() {
-                    game_state.last_player_action = "item".to_string();
-                    game_state.last_act_command = None;
-                    let item_name = game_state.inventory.remove(item_index);
+                if item_index < player_state.inventory.len() {
+                    combat_state.last_player_action = "item".to_string();
+                    combat_state.last_act_command = None;
+                    let item_name = player_state.inventory.remove(item_index);
                     
                     let (heal_amount, flavor_text) = if let Some(info) = item_dict.0.get(&item_name) {
                         (info.heal_amount, info.text.clone())
@@ -490,13 +493,13 @@ pub fn menu_input_system(
                         (0, "...".to_string())
                     };
 
-                    let old_hp = game_state.hp;
-                    game_state.hp = (game_state.hp + heal_amount as f32).min(game_state.max_hp);
-                    let recovered = (game_state.hp - old_hp) as i32;
+                    let old_hp = player_state.hp;
+                    player_state.hp = (player_state.hp + heal_amount as f32).min(player_state.max_hp);
+                    let recovered = (player_state.hp - old_hp) as i32;
 
                     let mut text = format!("* You ate the {}.", item_name);
 
-                    if game_state.hp >= game_state.max_hp {
+                    if player_state.hp >= player_state.max_hp {
                         text.push_str("\n* Your HP was maxed out!");
                     } else {
                         if !flavor_text.is_empty() {
@@ -507,7 +510,7 @@ pub fn menu_input_system(
                         }
                     }
 
-                    game_state.my_fight = 2; 
+                    combat_state.my_fight = 2; 
                     
                     for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
                     if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
@@ -526,9 +529,9 @@ pub fn menu_input_system(
                 }
             },
             MENU_LAYER_MERCY => {
-                let mercy_idx = game_state.menu_coords[MENU_LAYER_MERCY as usize];
-                game_state.last_act_command = None;
-                game_state.last_player_action = if mercy_idx == 0 {
+                let mercy_idx = menu_state.menu_coords[MENU_LAYER_MERCY as usize];
+                combat_state.last_act_command = None;
+                combat_state.last_player_action = if mercy_idx == 0 {
                     "spare".to_string()
                 } else {
                     "flee".to_string()
@@ -539,7 +542,7 @@ pub fn menu_input_system(
                     "* Escaped...".to_string()
                 };
                 
-                game_state.my_fight = 2;
+                combat_state.my_fight = 2;
                 for entity in menu_items_query.iter() { commands.entity(entity).despawn(); }
                 if let Ok((entity, _)) = typewriter_query.get_single_mut() { commands.entity(entity).despawn(); }
 
@@ -561,9 +564,9 @@ pub fn menu_input_system(
     
     if input.just_pressed(KeyCode::KeyX) {
         if layer == MENU_LAYER_FIGHT_TARGET || layer == MENU_LAYER_ACT_TARGET || layer == MENU_LAYER_ITEM || layer == MENU_LAYER_MERCY {
-            game_state.menu_layer = MENU_LAYER_TOP;
+            menu_state.menu_layer = MENU_LAYER_TOP;
         } else if layer == MENU_LAYER_ACT_COMMAND {
-            game_state.menu_layer = MENU_LAYER_ACT_TARGET;
+            menu_state.menu_layer = MENU_LAYER_ACT_TARGET;
         }
     }
 }

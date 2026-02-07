@@ -14,7 +14,9 @@ use crate::systems::phase;
 
 pub fn battle_flow_control(
     mut commands: Commands,
-    mut game_state: ResMut<GameState>,
+    mut enemy_state: ResMut<EnemyState>,
+    mut combat_state: ResMut<CombatState>,
+    mut menu_state: ResMut<MenuState>,
     asset_server: Res<AssetServer>,
     game_fonts: Res<GameFonts>,
     python_runtime: NonSend<PythonRuntime>,
@@ -26,33 +28,33 @@ pub fn battle_flow_control(
     mut soul_query: Query<&mut Transform, With<Soul>>,
     mut egui_contexts: EguiContexts,
     editor_query: Query<Entity, With<EditorWindow>>,
-) {
+){
     if let Ok(editor_entity) = editor_query.get_single() {
         if egui_contexts.ctx_for_window_mut(editor_entity).wants_keyboard_input() {
             return;
         }
     }
 
-    if game_state.mn_fight == 1 {
+    if combat_state.mn_fight == 1 {
         if bubbles.is_empty() {
-            game_state.turn_count += 1;
-            game_state.phase_turn += 1;
-            if let Some(next_phase) = phase::apply_phase_update(&mut game_state, PROJECT_NAME, "turn", &python_runtime) {
-                if next_phase != game_state.phase_name {
-                    game_state.phase_name = next_phase;
-                    game_state.phase_turn = 1;
-                    let _ = phase::apply_phase_update(&mut game_state, PROJECT_NAME, "turn", &python_runtime);
+            combat_state.turn_count += 1;
+            combat_state.phase_turn += 1;
+            if let Some(next_phase) = phase::apply_phase_update(&mut enemy_state, &mut combat_state, &mut menu_state, PROJECT_NAME, "turn", &python_runtime) {
+                if next_phase != combat_state.phase_name {
+                    combat_state.phase_name = next_phase;
+                    combat_state.phase_turn = 1;
+                    let _ = phase::apply_phase_update(&mut enemy_state, &mut combat_state, &mut menu_state, PROJECT_NAME, "turn", &python_runtime);
                 }
             }
 
             box_res.target = Rect::new(32.0, 250.0, 602.0, 385.0);
-            let bubble_pos = game_state.enemy_bubble_pos_override.unwrap_or(Vec2::new(320.0 + 40.0, 160.0 - 95.0));
+            let bubble_pos = enemy_state.bubble_pos_override.unwrap_or(Vec2::new(320.0 + 40.0, 160.0 - 95.0));
             let bubble_x = bubble_pos.x; 
             let bubble_y = bubble_pos.y; 
-            let bubble_texture = if game_state.enemy_bubble_texture.is_empty() {
+            let bubble_texture = if enemy_state.bubble_texture.is_empty() {
                 "texture/blcon/spr_blconsm.png".to_string()
             } else {
-                game_state.enemy_bubble_texture.clone()
+                enemy_state.bubble_texture.clone()
             };
             commands.spawn((
                 SpriteBundle {
@@ -69,14 +71,14 @@ pub fn battle_flow_control(
                 SpeechBubble,
                 Cleanup,
             ));
-            let msg = if let Some(message) = game_state.enemy_bubble_message_override.take() {
+            let msg = if let Some(message) = enemy_state.bubble_message_override.take() {
                 message
-            } else if game_state.enemy_bubble_messages.is_empty() {
+            } else if enemy_state.bubble_messages.is_empty() {
                 println!("Warning: enemy bubble messages missing");
                 "...".to_string()
             } else {
-                let idx = rand::thread_rng().gen_range(0..game_state.enemy_bubble_messages.len());
-                game_state.enemy_bubble_messages[idx].clone()
+                let idx = rand::thread_rng().gen_range(0..enemy_state.bubble_messages.len());
+                enemy_state.bubble_messages[idx].clone()
             };
             commands.spawn((
                 Text2dBundle {
@@ -101,8 +103,8 @@ pub fn battle_flow_control(
         if is_finished && input.just_pressed(KeyCode::KeyZ) {
             for entity in bubbles.iter() { commands.entity(entity).despawn_recursive(); }
             
-            game_state.mn_fight = 2; 
-            game_state.turn_timer = -1.0; 
+            combat_state.mn_fight = 2; 
+            combat_state.turn_timer = -1.0; 
             
             box_res.target = Rect::new(217.0, 125.0, 417.0, 385.0);
             
@@ -119,17 +121,19 @@ pub fn combat_turn_manager(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     time: Res<Time>,
-    mut game_state: ResMut<GameState>,
+    enemy_state: Res<EnemyState>,
+    mut combat_state: ResMut<CombatState>,
+    mut menu_state: ResMut<MenuState>,
     mut battle_box: ResMut<BattleBox>,
     python_runtime: NonSend<PythonRuntime>,
     bullet_query: Query<Entity, With<PythonBullet>>,
     mut scripts: ResMut<DanmakuScripts>,
 ) {
-    if game_state.mn_fight == 2 {
-        if game_state.turn_timer < 0.0 {
-            game_state.turn_timer = 5.0; 
+    if combat_state.mn_fight == 2 {
+        if combat_state.turn_timer < 0.0 {
+            combat_state.turn_timer = 5.0; 
             
-            let attack_patterns = &game_state.enemy_attacks;
+            let attack_patterns = &enemy_state.attacks;
             let script_name = if !attack_patterns.is_empty() {
                 let mut rng = rand::thread_rng();
                 let idx = rng.gen_range(0..attack_patterns.len());
@@ -357,21 +361,21 @@ pub fn combat_turn_manager(
             });
         }
 
-        game_state.turn_timer -= time.delta_seconds();
+        combat_state.turn_timer -= time.delta_seconds();
 
-        if game_state.turn_timer <= 0.0 {
+        if combat_state.turn_timer <= 0.0 {
             for entity in bullet_query.iter() {
                 commands.entity(entity).despawn();
             }
             
-            game_state.mn_fight = 3;
-            game_state.turn_timer = -1.0;
+            combat_state.mn_fight = 3;
+            combat_state.turn_timer = -1.0;
         }
-    } else if game_state.mn_fight == 3 {
-        game_state.mn_fight = 0;
-        game_state.my_fight = 0;
-        game_state.menu_layer = 0;
-        game_state.dialog_text = game_state.enemy_dialog_text.clone(); 
+    } else if combat_state.mn_fight == 3 {
+        combat_state.mn_fight = 0;
+        combat_state.my_fight = 0;
+        menu_state.menu_layer = 0;
+        menu_state.dialog_text = enemy_state.dialog_text.clone(); 
         
         battle_box.target = Rect::new(32.0, 250.0, 602.0, 385.0);
     }

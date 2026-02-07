@@ -60,60 +60,66 @@ impl Default for PythonRuntime {
     }
 }
 
+// プレイヤーデータ
 #[derive(Resource)]
-pub struct GameState {
+pub struct PlayerState {
     pub hp: f32,
     pub max_hp: f32,
     pub lv: i32,
     pub name: String,
-
     pub speed: f32,
     pub attack: f32,
     pub defense: f32,
     pub invincibility_duration: f32,
+    pub invincibility_timer: f32,
+    pub inventory: Vec<String>,
+    pub equipped_items: Vec<String>,
+}
 
-    pub enemy_hp: i32,
-    pub enemy_max_hp: i32,
-    pub enemy_atk: i32,
-    pub enemy_def: i32,
-    pub enemy_name: String,
-    pub enemy_dialog_text: String,
-    pub enemy_act_commands: Vec<String>,
-    pub enemy_act_texts: HashMap<String, String>,
-    pub enemy_bubble_messages: Vec<String>,
-    pub enemy_body_texture: String,
-    pub enemy_head_texture: String,
-    pub enemy_head_yoffset: f32,
-    pub enemy_base_x: f32,
-    pub enemy_base_y: f32,
-    pub enemy_scale: f32,
-    
-    pub enemy_attacks: Vec<String>,
+// 敵データ
+#[derive(Resource)]
+pub struct EnemyState {
+    pub hp: i32,
+    pub max_hp: i32,
+    pub atk: i32,
+    pub def: i32,
+    pub name: String,
+    pub dialog_text: String,
+    pub act_commands: Vec<String>,
+    pub act_texts: HashMap<String, String>,
+    pub bubble_messages: Vec<String>,
+    pub body_texture: String,
+    pub head_texture: String,
+    pub head_yoffset: f32,
+    pub base_x: f32,
+    pub base_y: f32,
+    pub scale: f32,
+    pub attacks: Vec<String>,
+    pub bubble_texture: String,
+    pub bubble_message_override: Option<String>,
+    pub bubble_pos_override: Option<Vec2>,
+}
+
+// メニュー操作
+#[derive(Resource)]
+pub struct MenuState {
+    pub menu_layer: i32,
+    pub menu_coords: Vec<i32>,
+    pub item_page: usize,
+    pub dialog_text: String,
+}
+
+// 戦闘フロー制御
+#[derive(Resource)]
+pub struct CombatState {
+    pub mn_fight: i32,
+    pub my_fight: i32,
     pub phase_name: String,
     pub phase_turn: i32,
     pub turn_count: i32,
-    pub enemy_bubble_texture: String,
-    pub enemy_bubble_message_override: Option<String>,
-    pub enemy_bubble_pos_override: Option<Vec2>,
-
-    pub mn_fight: i32,
-    pub my_fight: i32,
-
-    pub menu_layer: i32, 
-    pub menu_coords: Vec<i32>,
-
-    pub inventory: Vec<String>,
-    pub equipped_items: Vec<String>,
-    pub item_page: usize,
-
-    pub dialog_text: String,
-    
+    pub turn_timer: f32,
     pub bubble_timer: Timer,
     pub damage_display_timer: Timer,
-
-    pub turn_timer: f32,
-    
-    pub invincibility_timer: f32,
     pub last_player_action: String,
     pub last_act_command: Option<String>,
 }

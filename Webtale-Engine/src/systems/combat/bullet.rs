@@ -97,7 +97,8 @@ pub fn leapfrog_bullet_update(
 pub fn soul_collision_detection(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut game_state: ResMut<GameState>,
+    mut player_state: ResMut<PlayerState>,
+    mut combat_state: ResMut<CombatState>,
     mut soul_query: Query<(Entity, &Transform), With<Soul>>,
     bullet_query: Query<(&Transform, &PythonBullet)>,
     mut visibility_param_set: ParamSet<(
@@ -105,7 +106,7 @@ pub fn soul_collision_detection(
         Query<&mut Visibility, (With<Text>, Without<Soul>, Without<EditorWindow>)>,
     )>,
 ) {
-    if game_state.invincibility_timer > 0.0 {
+    if player_state.invincibility_timer > 0.0 {
         return;
     }
 
@@ -116,13 +117,13 @@ pub fn soul_collision_detection(
         for (bullet_tf, bullet) in bullet_query.iter() {
             let distance = soul_tf.translation.distance(bullet_tf.translation);
             if distance < (soul_radius + bullet_radius) {
-                game_state.hp -= bullet.damage as f32;
+                player_state.hp -= bullet.damage as f32;
                 
-                game_state.invincibility_timer = game_state.invincibility_duration;
+                player_state.invincibility_timer = player_state.invincibility_duration;
 
-                if game_state.hp <= 0.0 { 
-                    game_state.hp = 0.0; 
-                    game_state.mn_fight = 99;
+                if player_state.hp <= 0.0 { 
+                    player_state.hp = 0.0; 
+                    combat_state.mn_fight = 99;
 
                     for mut visibility in visibility_param_set.p0().iter_mut() {
                         *visibility = Visibility::Hidden;
@@ -174,19 +175,19 @@ pub fn soul_collision_detection(
 
 pub fn invincibility_update(
     time: Res<Time>,
-    mut game_state: ResMut<GameState>,
+    mut player_state: ResMut<PlayerState>,
     mut soul_query: Query<&mut Visibility, With<Soul>>,
 ) {
-    if game_state.invincibility_timer > 0.0 {
-        game_state.invincibility_timer -= time.delta_seconds();
+    if player_state.invincibility_timer > 0.0 {
+        player_state.invincibility_timer -= time.delta_seconds();
 
         if let Ok(mut visibility) = soul_query.get_single_mut() {
-            if game_state.invincibility_timer <= 0.0 {
-                game_state.invincibility_timer = 0.0;
+            if player_state.invincibility_timer <= 0.0 {
+                player_state.invincibility_timer = 0.0;
                 *visibility = Visibility::Inherited;
             } else {
                 let blink_interval = 1.0 / 15.0; 
-                let blink_state = (game_state.invincibility_timer / blink_interval).ceil() as i32;
+                let blink_state = (player_state.invincibility_timer / blink_interval).ceil() as i32;
                 
                 if blink_state % 2 == 0 {
                     *visibility = Visibility::Hidden;

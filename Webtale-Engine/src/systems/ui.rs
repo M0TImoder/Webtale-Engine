@@ -6,19 +6,22 @@ use crate::constants::*;
 
 pub fn menu_render_system(
     mut commands: Commands,
-    game_state: Res<GameState>,
+    combat_state: Res<CombatState>,
+    enemy_state: Res<EnemyState>,
+    menu_state: Res<MenuState>,
+    player_state: Res<PlayerState>,
     game_fonts: Res<GameFonts>,
     menu_items: Query<Entity, With<MenuTextItem>>,
     typewriter_query: Query<Entity, With<MainDialogText>>,
     act_commands_query: Query<&ActCommands, With<EnemyBody>>,
-) {
+){
     for entity in menu_items.iter() {
         commands.entity(entity).despawn_recursive();
     }
 
-    if game_state.mn_fight != 0 || game_state.my_fight != 0 { return; }
+    if combat_state.mn_fight != 0 || combat_state.my_fight != 0 { return; }
 
-    let layer = game_state.menu_layer;
+    let layer = menu_state.menu_layer;
 
     if layer == MENU_LAYER_TOP {
         if typewriter_query.is_empty() {
@@ -29,7 +32,7 @@ pub fn menu_render_system(
                     transform: Transform::from_translation(gml_to_bevy(52.0, 270.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
                     ..default()
                 },
-                Typewriter { full_text: game_state.dialog_text.clone(), visible_chars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
+                Typewriter { full_text: menu_state.dialog_text.clone(), visible_chars: 0, timer: Timer::from_seconds(0.03, TimerMode::Repeating), finished: false },
                 MainDialogText,
                 Cleanup,
             ));
@@ -42,7 +45,7 @@ pub fn menu_render_system(
         let start_y = 270.0;
 
         if layer == MENU_LAYER_FIGHT_TARGET || layer == MENU_LAYER_ACT_TARGET {
-            let enemy_name = if game_state.enemy_name.is_empty() { "Enemy" } else { &game_state.enemy_name };
+            let enemy_name = if enemy_state.name.is_empty() { "Enemy" } else { &enemy_state.name };
             commands.spawn((
                 Text2dBundle {
                     text: Text::from_section(format!("* {}", enemy_name), font_style.clone()),
@@ -70,7 +73,7 @@ pub fn menu_render_system(
                     Cleanup,
                 ));
 
-                let hp_percent = (game_state.enemy_hp as f32 / game_state.enemy_max_hp as f32).max(0.0);
+                let hp_percent = (enemy_state.hp as f32 / enemy_state.max_hp as f32).max(0.0);
                 commands.spawn((
                     SpriteBundle {
                         sprite: Sprite { color: Color::rgb(0.0, 1.0, 0.0), custom_size: Some(Vec2::new(bar_width * hp_percent, bar_height)), anchor: Anchor::TopLeft, ..default() },
@@ -102,9 +105,9 @@ pub fn menu_render_system(
                 }
             }
         } else if layer == MENU_LAYER_ITEM {
-            let page_start = game_state.item_page * ITEMS_PER_PAGE;
+            let page_start = menu_state.item_page * ITEMS_PER_PAGE;
             for i in 0..ITEMS_PER_PAGE {
-                if let Some(item_name) = game_state.inventory.get(page_start + i) {
+                if let Some(item_name) = player_state.inventory.get(page_start + i) {
                     let col = i % 2;
                     let row = i / 2;
                     let x_offset = if col == 0 { 0.0 } else { 240.0 };
@@ -127,7 +130,7 @@ pub fn menu_render_system(
             
             commands.spawn((
                 Text2dBundle {
-                    text: Text::from_section(format!("   PAGE {}", game_state.item_page + 1), 
+                    text: Text::from_section(format!("   PAGE {}", menu_state.item_page + 1), 
                         TextStyle { font: game_fonts.dialog.clone(), font_size: 32.0, color: Color::WHITE }),
                     text_anchor: Anchor::TopLeft,
                     transform: Transform::from_translation(gml_to_bevy(page_x, page_y) + Vec3::new(0.0, 0.0, Z_TEXT)),
@@ -155,7 +158,7 @@ pub fn menu_render_system(
     }
 }
 
-pub fn update_box_size(mut box_res: ResMut<BattleBox>, time: Res<Time>, _game_state: Res<GameState>) {
+pub fn update_box_size(mut box_res: ResMut<BattleBox>, time: Res<Time>) {
     let speed = 15.0 * time.delta_seconds();
     box_res.current.min.x += (box_res.target.min.x - box_res.current.min.x) * speed;
     box_res.current.min.y += (box_res.target.min.y - box_res.current.min.y) * speed;
@@ -187,7 +190,7 @@ pub fn draw_battle_box(
 }
 
 pub fn draw_ui_status(
-    game_state: Res<GameState>,
+    player_state: Res<PlayerState>,
     mut red_bar: Query<&mut Sprite, (With<HpBarRed>, Without<HpBarYellow>)>,
     mut yel_bar: Query<&mut Sprite, (With<HpBarYellow>, Without<HpBarRed>)>,
     mut hp_text_query: Query<(&mut Text, &mut Transform), (With<HpText>, Without<LvText>)>,
@@ -196,31 +199,32 @@ pub fn draw_ui_status(
 ) {
     let bar_scale = 1.2; let height = 20.0;   
     
-    if let Ok(mut s) = red_bar.get_single_mut() { s.custom_size = Some(Vec2::new(game_state.max_hp * bar_scale, height)); }
-    if let Ok(mut s) = yel_bar.get_single_mut() { s.custom_size = Some(Vec2::new(game_state.hp * bar_scale, height)); }
+    if let Ok(mut s) = red_bar.get_single_mut() { s.custom_size = Some(Vec2::new(player_state.max_hp * bar_scale, height)); }
+    if let Ok(mut s) = yel_bar.get_single_mut() { s.custom_size = Some(Vec2::new(player_state.hp * bar_scale, height)); }
     
     if let Ok((mut t, mut trans)) = hp_text_query.get_single_mut() {
-        t.sections[0].value = format!("{:.0} / {:.0}", game_state.hp, game_state.max_hp);
+        t.sections[0].value = format!("{:.0} / {:.0}", player_state.hp, player_state.max_hp);
         let visual_hp_bar_x = 250.0;
-        let text_x = visual_hp_bar_x + (game_state.max_hp * bar_scale) + 15.0;
+        let text_x = visual_hp_bar_x + (player_state.max_hp * bar_scale) + 15.0;
         trans.translation = gml_to_bevy(text_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT);
     }
 
     if let Ok(mut t) = lv_text_query.get_single_mut() {
-        t.sections[0].value = format!("LV {}", game_state.lv);
+        t.sections[0].value = format!("LV {}", player_state.lv);
     }
 
     if let Ok(mut t) = name_text_query.get_single_mut() {
-        t.sections[0].value = game_state.name.clone();
+        t.sections[0].value = player_state.name.clone();
     }
 }
 
 pub fn update_button_sprites(
-    game_state: Res<GameState>,
+    combat_state: Res<CombatState>,
+    menu_state: Res<MenuState>,
     mut query: Query<(&ButtonVisual, &mut Handle<Image>)>,
 ) {
     for (btn, mut texture_handle) in query.iter_mut() {
-        if game_state.mn_fight == 0 && game_state.menu_layer == MENU_LAYER_TOP && btn.index == game_state.menu_coords[MENU_LAYER_TOP as usize] {
+        if combat_state.mn_fight == 0 && menu_state.menu_layer == MENU_LAYER_TOP && btn.index == menu_state.menu_coords[MENU_LAYER_TOP as usize] {
             *texture_handle = btn.selected_texture.clone();
         } else {
             *texture_handle = btn.normal_texture.clone();
@@ -232,18 +236,19 @@ pub fn animate_text(
     mut commands: Commands,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
-    mut game_state: ResMut<GameState>,
+    mut combat_state: ResMut<CombatState>,
+    mut menu_state: ResMut<MenuState>,
     mut query: Query<(Entity, &mut Typewriter, &mut Text)>,
 ) {
     for (entity, mut writer, mut text) in query.iter_mut() {
         if writer.finished { 
-            if game_state.my_fight == 2 {
+            if combat_state.my_fight == 2 {
                 if input.just_pressed(KeyCode::KeyZ) {
                      commands.entity(entity).despawn();
-                     game_state.my_fight = 0;
-                     game_state.mn_fight = 1; 
-                     game_state.bubble_timer.reset(); 
-                     game_state.menu_layer = MENU_LAYER_TOP;
+                     combat_state.my_fight = 0;
+                     combat_state.mn_fight = 1; 
+                     combat_state.bubble_timer.reset(); 
+                     menu_state.menu_layer = MENU_LAYER_TOP;
                 }
             }
             continue; 

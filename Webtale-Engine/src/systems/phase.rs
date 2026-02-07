@@ -6,7 +6,7 @@ use rustpython_vm::import::import_codeobj;
 use rustpython_vm::PyObjectRef;
 use crate::constants::*;
 use crate::python_scripts;
-use crate::resources::{GameState, PythonRuntime};
+use crate::resources::{EnemyState, CombatState, MenuState, PythonRuntime};
 
 pub fn resolve_initial_phase(project_name: &str, requested: &str) -> String {
     if !requested.is_empty() {
@@ -45,12 +45,12 @@ fn resolve_bubble_texture_name(name: &str) -> String {
     .to_string()
 }
 
-pub fn apply_phase_update(game_state: &mut GameState, project_name: &str, trigger: &str, python_runtime: &PythonRuntime) -> Option<String> {
-    if game_state.phase_name.is_empty() {
+pub fn apply_phase_update(enemy_state: &mut EnemyState, combat_state: &mut CombatState, menu_state: &mut MenuState, project_name: &str, trigger: &str, python_runtime: &PythonRuntime) -> Option<String> {
+    if combat_state.phase_name.is_empty() {
         return None;
     }
 
-    let phase_name = game_state.phase_name.clone();
+    let phase_name = combat_state.phase_name.clone();
     let script_content = match python_scripts::get_phase_script(project_name, &phase_name) {
         Some(content) => content,
         None => {
@@ -112,25 +112,25 @@ pub fn apply_phase_update(game_state: &mut GameState, project_name: &str, trigge
         }
 
         let context = vm.ctx.new_dict();
-        let _ = context.set_item("turn", vm.new_pyobj(game_state.turn_count), vm);
-        let _ = context.set_item("phaseTurn", vm.new_pyobj(game_state.phase_turn), vm);
-        let _ = context.set_item("enemyHp", vm.new_pyobj(game_state.enemy_hp), vm);
-        let _ = context.set_item("enemyMaxHp", vm.new_pyobj(game_state.enemy_max_hp), vm);
-        let _ = context.set_item("enemyName", vm.new_pyobj(game_state.enemy_name.clone()), vm);
+        let _ = context.set_item("turn", vm.new_pyobj(combat_state.turn_count), vm);
+        let _ = context.set_item("phaseTurn", vm.new_pyobj(combat_state.phase_turn), vm);
+        let _ = context.set_item("enemyHp", vm.new_pyobj(enemy_state.hp), vm);
+        let _ = context.set_item("enemyMaxHp", vm.new_pyobj(enemy_state.max_hp), vm);
+        let _ = context.set_item("enemyName", vm.new_pyobj(enemy_state.name.clone()), vm);
         let _ = context.set_item("phase", vm.new_pyobj(phase_name.clone()), vm);
         let _ = context.set_item("trigger", vm.new_pyobj(trigger), vm);
-        let _ = context.set_item("isFirstTurn", vm.new_pyobj(game_state.turn_count == 1), vm);
-        let _ = context.set_item("isPhaseStart", vm.new_pyobj(game_state.phase_turn == 1), vm);
+        let _ = context.set_item("isFirstTurn", vm.new_pyobj(combat_state.turn_count == 1), vm);
+        let _ = context.set_item("isPhaseStart", vm.new_pyobj(combat_state.phase_turn == 1), vm);
         let _ = context.set_item("isStart", vm.new_pyobj(trigger == "start"), vm);
         let _ = context.set_item("isTurnStart", vm.new_pyobj(trigger == "turn"), vm);
         let _ = context.set_item("isDamageApplied", vm.new_pyobj(trigger == "damage"), vm);
-        let last_action = if game_state.last_player_action.is_empty() {
+        let last_action = if combat_state.last_player_action.is_empty() {
             vm.ctx.none()
         } else {
-            game_state.last_player_action.clone().to_pyobject(vm)
+            combat_state.last_player_action.clone().to_pyobject(vm)
         };
         let _ = context.set_item("lastPlayerAction", last_action, vm);
-        let last_act = match &game_state.last_act_command {
+        let last_act = match &combat_state.last_act_command {
             Some(command) => command.clone().to_pyobject(vm),
             None => vm.ctx.none(),
         };
@@ -228,33 +228,33 @@ pub fn apply_phase_update(game_state: &mut GameState, project_name: &str, trigge
 
         let mut apply_state = |state_dict: &PyDictRef| {
             if let Some(dialog_text) = read_option_string(state_dict, "dialogText", "phase") {
-                game_state.enemy_dialog_text = dialog_text.clone();
-                if game_state.mn_fight == 0 && game_state.my_fight == 0 && game_state.menu_layer == MENU_LAYER_TOP {
-                    game_state.dialog_text = dialog_text;
+                enemy_state.dialog_text = dialog_text.clone();
+                if combat_state.mn_fight == 0 && combat_state.my_fight == 0 && menu_state.menu_layer == MENU_LAYER_TOP {
+                    menu_state.dialog_text = dialog_text;
                 }
             }
 
             if let Some(attacks) = read_option_vec_string(state_dict, "attackPatterns", "phase") {
-                game_state.enemy_attacks = attacks;
+                enemy_state.attacks = attacks;
             }
 
             if let Some(messages) = read_option_vec_string(state_dict, "bubbleMessages", "phase") {
-                game_state.enemy_bubble_messages = messages;
+                enemy_state.bubble_messages = messages;
             }
 
             if let Some(message) = read_option_string(state_dict, "bubbleMessage", "phase") {
                 if !message.is_empty() {
-                    game_state.enemy_bubble_message_override = Some(message);
+                    enemy_state.bubble_message_override = Some(message);
                 }
             }
 
             if let Some(texture) = read_option_string(state_dict, "bubbleTexture", "phase") {
-                game_state.enemy_bubble_texture = resolve_bubble_texture_name(&texture);
+                enemy_state.bubble_texture = resolve_bubble_texture_name(&texture);
             }
 
             if let Some(pos) = read_option_vec_f32(state_dict, "bubblePosition", "phase") {
                 if pos.len() == 2 {
-                    game_state.enemy_bubble_pos_override = Some(Vec2::new(pos[0], pos[1]));
+                    enemy_state.bubble_pos_override = Some(Vec2::new(pos[0], pos[1]));
                 } else {
                     println!("Warning: phase bubblePosition invalid");
                 }

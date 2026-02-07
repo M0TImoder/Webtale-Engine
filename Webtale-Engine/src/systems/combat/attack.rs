@@ -10,7 +10,8 @@ pub fn attack_bar_update(
     mut commands: Commands,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
-    mut game_state: ResMut<GameState>,
+    mut combat_state: ResMut<CombatState>,
+    player_state: Res<PlayerState>,
     asset_server: Res<AssetServer>,
     mut query: Query<(Entity, &mut Transform, &mut AttackBar, &mut Handle<Image>)>,
     enemy_query: Query<&Transform, (With<EnemyBody>, Without<AttackBar>)>,
@@ -23,7 +24,7 @@ pub fn attack_bar_update(
         }
     }
 
-    if game_state.mn_fight != 4 && game_state.mn_fight != 5 { return; }
+    if combat_state.mn_fight != 4 && combat_state.mn_fight != 5 { return; }
 
     for (bar_entity, mut transform, mut bar, mut texture) in query.iter_mut() {
         if bar.moving {
@@ -49,7 +50,7 @@ pub fn attack_bar_update(
                 
                 let distance = (transform.translation.x - box_center_x).abs();
                 
-                let base_damage = game_state.attack;
+                let base_damage = player_state.attack;
                 
                 let damage = if distance < 12.0 {
                     (base_damage * 2.2) as i32 
@@ -89,7 +90,7 @@ pub fn attack_bar_update(
                     target_pos: enemy_pos,
                 });
 
-                game_state.mn_fight = 5; 
+                combat_state.mn_fight = 5; 
             }
         } else {
             if bar.flash_timer.tick(time.delta()).just_finished() {
@@ -104,7 +105,9 @@ pub fn attack_bar_update(
 pub fn apply_pending_damage(
     mut commands: Commands,
     time: Res<Time>,
-    mut game_state: ResMut<GameState>,
+    mut enemy_state: ResMut<EnemyState>,
+    mut combat_state: ResMut<CombatState>,
+    mut menu_state: ResMut<MenuState>,
     asset_server: Res<AssetServer>,
     _game_fonts: Res<GameFonts>,
     python_runtime: NonSend<PythonRuntime>,
@@ -112,20 +115,20 @@ pub fn apply_pending_damage(
 ) {
     for (entity, mut pending) in query.iter_mut() {
         if pending.timer.tick(time.delta()).finished() {
-            let old_hp = game_state.enemy_hp;
-            game_state.enemy_hp = (game_state.enemy_hp - pending.damage).max(0);
+            let old_hp = enemy_state.hp;
+            enemy_state.hp = (enemy_state.hp - pending.damage).max(0);
             let damage = pending.damage;
             let enemy_pos = pending.target_pos;
-            game_state.last_act_command = None;
-            game_state.last_player_action = if damage > 0 {
+            combat_state.last_act_command = None;
+            combat_state.last_player_action = if damage > 0 {
                 "attackHit".to_string()
             } else {
                 "attackMiss".to_string()
             };
-            if let Some(next_phase) = phase::apply_phase_update(&mut game_state, PROJECT_NAME, "damage", &python_runtime) {
-                if next_phase != game_state.phase_name {
-                    game_state.phase_name = next_phase;
-                    game_state.phase_turn = 0;
+            if let Some(next_phase) = phase::apply_phase_update(&mut enemy_state, &mut combat_state, &mut menu_state, PROJECT_NAME, "damage", &python_runtime) {
+                if next_phase != combat_state.phase_name {
+                    combat_state.phase_name = next_phase;
+                    combat_state.phase_turn = 0;
                 }
             }
 
@@ -195,8 +198,8 @@ pub fn apply_pending_damage(
                     EnemyHpBar {
                         lifespan: Timer::from_seconds(1.2, TimerMode::Once),
                         animation: Timer::from_seconds(1.0, TimerMode::Once),
-                        start_width: (old_hp as f32 / game_state.enemy_max_hp as f32) * bar_width_max,
-                        target_width: (game_state.enemy_hp as f32 / game_state.enemy_max_hp as f32) * bar_width_max,
+                        start_width: (old_hp as f32 / enemy_state.max_hp as f32) * bar_width_max,
+                        target_width: (enemy_state.hp as f32 / enemy_state.max_hp as f32) * bar_width_max,
                     },
                     Cleanup,
                 )).with_children(|parent| {
@@ -210,7 +213,7 @@ pub fn apply_pending_damage(
                         SpriteBundle {
                             sprite: Sprite { 
                                 color: Color::rgb(0.0, 1.0, 0.0), 
-                                custom_size: Some(Vec2::new((old_hp as f32 / game_state.enemy_max_hp as f32) * bar_width_max, bar_height)),
+                                custom_size: Some(Vec2::new((old_hp as f32 / enemy_state.max_hp as f32) * bar_width_max, bar_height)),
                                 anchor: Anchor::CenterLeft, 
                                 ..default() 
                             },
@@ -249,7 +252,9 @@ pub fn animate_slice_effect(
 pub fn damage_number_update(
     mut commands: Commands,
     time: Res<Time>,
-    mut game_state: ResMut<GameState>,
+    enemy_state: Res<EnemyState>,
+    mut combat_state: ResMut<CombatState>,
+    mut menu_state: ResMut<MenuState>,
     mut query: Query<(Entity, &mut Transform, &mut DamageNumber), Without<EnemyBody>>,
     attack_bar_query: Query<Entity, With<AttackBar>>,
     target_box_query: Query<Entity, With<AttackTargetBox>>,
@@ -273,7 +278,7 @@ pub fn damage_number_update(
             for bar_entity in attack_bar_query.iter() { commands.entity(bar_entity).despawn(); }
             for box_entity in target_box_query.iter() { commands.entity(box_entity).despawn(); }
             
-            if game_state.enemy_hp <= 0 {
+            if enemy_state.hp <= 0 {
                 for (e_entity, _, e_transform, handle) in enemy_query.iter_mut() {
                     commands.entity(e_entity).insert(Vaporizing {
                         scan_line: 0.0,
@@ -281,11 +286,11 @@ pub fn damage_number_update(
                         initial_y: e_transform.translation.y,
                     });
                 }
-                game_state.mn_fight = 0; 
+                combat_state.mn_fight = 0; 
             } else {
-                game_state.mn_fight = 1; 
-                game_state.bubble_timer.reset(); 
-                game_state.menu_layer = MENU_LAYER_TOP;
+                combat_state.mn_fight = 1; 
+                combat_state.bubble_timer.reset(); 
+                menu_state.menu_layer = MENU_LAYER_TOP;
             }
         }
     }
