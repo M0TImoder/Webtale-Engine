@@ -250,7 +250,7 @@ pub fn draw_ui_status(
         t.0 = format!("{:.0} / {:.0}", player_state.hp, player_state.max_hp);
         let visual_hp_bar_x = 250.0;
         let text_x = visual_hp_bar_x + (player_state.max_hp * bar_scale) + 15.0;
-        trans.translation = gml_to_bevy(text_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT);
+        trans.translation = gml_to_bevy(text_x, 398.0) + Vec3::new(0.0, 0.0, Z_TEXT);
     }
 
     if let Ok(mut t) = lv_text_query.get_single_mut() {

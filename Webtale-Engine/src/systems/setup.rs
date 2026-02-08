@@ -594,7 +594,7 @@ fn spawn_battle_box_visuals(commands: &mut Commands) {
 
 // UI生成
 fn spawn_ui(commands: &mut Commands, game_fonts: &GameFonts, player_state: &PlayerState, menu_state: &MenuState) {
-    let font_size = 23.0 * TEXT_SCALE;
+    let font_size = 32.0 * TEXT_SCALE;
     let font_style = TextFont { font: game_fonts.main.clone(), font_size, ..default() };
     let font_color = TextColor(COLOR_UI_TEXT);
 
@@ -603,7 +603,7 @@ fn spawn_ui(commands: &mut Commands, game_fonts: &GameFonts, player_state: &Play
         font_style.clone(),
         font_color,
         Anchor::TopLeft,
-        Transform::from_translation(gml_to_bevy(30.0, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
+        Transform::from_translation(gml_to_bevy(30.0, 398.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
         PlayerNameText,
         Cleanup,
     ));
@@ -614,14 +614,14 @@ fn spawn_ui(commands: &mut Commands, game_fonts: &GameFonts, player_state: &Play
         font_style.clone(),
         font_color,
         Anchor::TopLeft,
-        Transform::from_translation(gml_to_bevy(lv_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
+        Transform::from_translation(gml_to_bevy(lv_x, 398.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
         LvText,
         Cleanup,
     ));
 
     commands.spawn((
         Text2d::new("HP"),
-        TextFont { font: game_fonts.hp_label.clone(), font_size: 10.0 * TEXT_SCALE, ..default() },
+        TextFont { font: game_fonts.hp_label.clone(), font_size: 14.0 * TEXT_SCALE, ..default() },
         TextColor(COLOR_UI_TEXT),
         Anchor::TopLeft,
         Transform::from_translation(gml_to_bevy(225.0, 405.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
@@ -657,7 +657,7 @@ fn spawn_ui(commands: &mut Commands, game_fonts: &GameFonts, player_state: &Play
         font_style,
         font_color,
         Anchor::TopLeft,
-        Transform::from_translation(gml_to_bevy(hp_text_x, 401.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
+        Transform::from_translation(gml_to_bevy(hp_text_x, 398.0) + Vec3::new(0.0, 0.0, Z_TEXT)),
         HpText,
         Cleanup,
     ));
