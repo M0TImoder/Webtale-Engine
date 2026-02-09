@@ -18,6 +18,7 @@ def getEnemyStatus():
         "bodyTexture": "texture/enemy/spr_froglegs_0.png",
         "headTexture": "texture/enemy/spr_froghead_0.png",
         "headYOffset": 22.0,
+        "tachieScript": "froggit",
         "baseX": 320.0,
         "baseY": 160.0,
         "scale": 1.0

@@ -29,6 +29,14 @@ pub fn get_enemy_status_script(project: &str) -> Option<String> {
     read_script(project_root(project).join("properties").join("enemyStatus.py"))
 }
 
+// 立ち絵スクリプト
+pub fn get_tachie_script(project: &str, script_name: &str) -> Option<String> {
+    if script_name.is_empty() {
+        return None;
+    }
+    read_script(project_root(project).join("tachie").join(format!("{}.py", script_name)))
+}
+
 // フェーズAPIスクリプト
 pub fn get_phase_api_script(project: &str) -> Option<String> {
     read_script(project_root(project).join("phases").join("phase_api.py"))

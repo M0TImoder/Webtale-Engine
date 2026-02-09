@@ -3,6 +3,7 @@ use rand::Rng;
 use rustpython_vm::function::ArgIntoFloat;
 use rustpython_vm::Interpreter;
 use rustpython_vm::PyObjectRef;
+use evalexpr::Node;
 use std::collections::HashMap;
 
 // アイテム情報
@@ -18,10 +19,25 @@ pub struct ItemInfo {
 #[derive(Resource, Default)]
 pub struct ItemDictionary(pub HashMap<String, ItemInfo>);
 
+// 弾幕式
+#[derive(Clone)]
+pub struct ExprAssignment {
+    pub target: String,
+    pub expr: Node,
+}
+
+#[derive(Clone)]
+pub struct RustSimSpec {
+    pub update_exprs: Vec<ExprAssignment>,
+    pub delete_expr: Option<Node>,
+    pub texture_expr: Option<Node>,
+}
+
 // 弾幕スクリプトキャッシュ
 #[derive(Resource, Default)]
 pub struct DanmakuScripts {
     pub modules: HashMap<String, PyObjectRef>,
+    pub rust_specs: HashMap<String, RustSimSpec>,
 }
 
 // Python実行環境
@@ -95,6 +111,9 @@ pub struct EnemyState {
     pub body_texture: String,
     pub head_texture: String,
     pub head_yoffset: f32,
+    pub tachie_script: String,
+    pub head_sway_speed: f32,
+    pub head_sway_amplitude: f32,
     pub base_x: f32,
     pub base_y: f32,
     pub scale: f32,

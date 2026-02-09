@@ -192,7 +192,7 @@ fn spawn_editor_window(
 
     commands.spawn((
         SpriteBundle {
-            sprite: Sprite { image: asset_server.load("player/spr_soul_0.png"), ..default() },
+            sprite: Sprite { image: asset_server.load("texture/heart/spr_heart_0.png"), ..default() },
             transform: Transform::from_translation(box_center + Vec3::new(0.0, 0.0, 2.0)),
             ..default()
         },
@@ -304,6 +304,7 @@ pub fn handle_global_input(
             });
 
             danmaku_scripts.modules.clear();
+            danmaku_scripts.rust_specs.clear();
             menu_render_cache.key = None;
             spawn_game_objects(&mut commands, &asset_server, &game_fonts, &python_runtime);
         }

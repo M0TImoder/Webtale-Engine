@@ -124,6 +124,9 @@ fn default_enemy_state() -> EnemyState {
         body_texture: String::new(),
         head_texture: String::new(),
         head_yoffset: 0.0,
+        tachie_script: String::new(),
+        head_sway_speed: 2.0,
+        head_sway_amplitude: 2.0,
         base_x: 0.0,
         base_y: 0.0,
         scale: 1.0,
@@ -392,6 +395,9 @@ fn load_python_game_data(
                                 if let Some(head_yoffset) = read_option_f32(vm, &dict, "headYOffset", "enemyStatus", true) {
                                     enemy_state.head_yoffset = head_yoffset;
                                 }
+                                if let Some(tachie_script) = read_option_string(vm, &dict, "tachieScript", "enemyStatus", true) {
+                                    enemy_state.tachie_script = tachie_script;
+                                }
                                 if let Some(base_x) = read_option_f32(vm, &dict, "baseX", "enemyStatus", true) {
                                     enemy_state.base_x = base_x;
                                 }
@@ -416,6 +422,51 @@ fn load_python_game_data(
                     Err(err) => {
                         vm.print_exception(err.clone());
                         println!("Warning: enemyStatus lookup {:?}", err);
+                    }
+                }
+            }
+        }
+
+        if !enemy_state.tachie_script.is_empty() {
+            let tachie_script = match python_scripts::get_tachie_script(project_name, &enemy_state.tachie_script) {
+                Some(script) => script,
+                None => {
+                    println!(
+                        "Warning: Could not load projects/{}/tachie/{}.py",
+                        project_name, enemy_state.tachie_script
+                    );
+                    String::new()
+                }
+            };
+            if !tachie_script.is_empty() {
+                let filename = format!("tachie/{}.py", enemy_state.tachie_script);
+                if let Some(scope) = run_script(&tachie_script, &filename) {
+                    match scope.globals.get_item_opt("getTachieData", vm) {
+                        Ok(Some(func)) => match vm.invoke(&func, ()) {
+                            Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
+                                Ok(dict) => {
+                                    if let Some(speed) = read_option_f32(vm, &dict, "headSwaySpeed", "tachie", true) {
+                                        enemy_state.head_sway_speed = speed;
+                                    }
+                                    if let Some(amplitude) = read_option_f32(vm, &dict, "headSwayAmplitude", "tachie", true) {
+                                        enemy_state.head_sway_amplitude = amplitude;
+                                    }
+                                }
+                                Err(err) => {
+                                    vm.print_exception(err.clone());
+                                    println!("Warning: tachie result {:?}", err);
+                                }
+                            },
+                            Err(err) => {
+                                vm.print_exception(err.clone());
+                                println!("Warning: tachie call {:?}", err);
+                            }
+                        },
+                        Ok(None) => println!("Warning: tachie missing getTachieData"),
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: tachie lookup {:?}", err);
+                        }
                     }
                 }
             }
@@ -526,7 +577,12 @@ fn spawn_enemy_entities(commands: &mut Commands, asset_server: &AssetServer, ene
             },
             ..default()
         },
-        EnemyHead { base_y: head_pos.y, timer: 0.0 },
+        EnemyHead {
+            base_y: head_pos.y,
+            timer: 0.0,
+            sway_speed: enemy_state.head_sway_speed,
+            sway_amplitude: enemy_state.head_sway_amplitude,
+        },
         EnemyBody,
         Cleanup,
     ));

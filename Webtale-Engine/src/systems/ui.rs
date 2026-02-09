@@ -322,7 +322,7 @@ pub fn animate_enemy_head(
 ) {
     for (mut transform, mut head) in query.iter_mut() {
         head.timer += time.delta_secs();
-        let offset = (head.timer * 2.0).sin() * 2.0; 
+        let offset = (head.timer * head.sway_speed).sin() * head.sway_amplitude; 
         transform.translation.y = head.base_y + offset;
     }
 }
