@@ -35,18 +35,21 @@ pub fn leapfrog_bullet_update(
     let dt = time.delta_secs();
 
     for (entity, mut transform, mut bullet, mut sprite) in expr_query.iter_mut() {
-        let _ = bullet.context.set_value("dt".to_string(), Value::Float(dt as f64));
-        let next_t = match bullet.context.get_value("t") {
+        let (context, update_exprs, delete_expr, texture_expr, last_texture) = {
+            let ExpressionBullet { context, update_exprs, delete_expr, texture_expr, last_texture, .. } = &mut *bullet;
+            (context, update_exprs, delete_expr, texture_expr, last_texture)
+        };
+        let _ = context.set_value("dt".to_string(), Value::Float(dt as f64));
+        let next_t = match context.get_value("t") {
             Some(value) => value_to_f64(&value).unwrap_or(0.0) + dt as f64,
             None => dt as f64,
         };
-        let _ = bullet.context.set_value("t".to_string(), Value::Float(next_t));
+        let _ = context.set_value("t".to_string(), Value::Float(next_t));
 
-        let update_exprs = bullet.update_exprs.clone();
         for assignment in update_exprs.iter() {
-            match assignment.expr.eval_with_context(&bullet.context) {
+            match assignment.expr.eval_with_context(context) {
                 Ok(value) => {
-                    let _ = bullet.context.set_value(assignment.target.clone(), value);
+                    let _ = context.set_value(assignment.target.clone(), value);
                 }
                 Err(err) => {
                     println!("Warning: bullet expr {} {:?}", assignment.target, err);
@@ -54,42 +57,42 @@ pub fn leapfrog_bullet_update(
             }
         }
 
-        if let Some(value) = bullet.context.get_value("x") {
+        if let Some(value) = context.get_value("x") {
             if let Some(x) = value_to_f64(&value) {
                 transform.translation.x = x as f32;
             }
         }
-        if let Some(value) = bullet.context.get_value("y") {
+        if let Some(value) = context.get_value("y") {
             if let Some(y) = value_to_f64(&value) {
                 transform.translation.y = y as f32;
             }
         }
 
         let mut next_texture: Option<String> = None;
-        if let Some(expr) = &bullet.texture_expr {
-            if let Ok(value) = expr.eval_with_context(&bullet.context) {
+        if let Some(expr) = texture_expr {
+            if let Ok(value) = expr.eval_with_context(context) {
                 if let Value::String(text) = value {
                     next_texture = Some(text);
                 }
             }
-        } else if let Some(Value::String(text)) = bullet.context.get_value("texture") {
+        } else if let Some(Value::String(text)) = context.get_value("texture") {
             next_texture = Some(text.clone());
         }
         if let Some(texture) = next_texture {
-            if bullet.last_texture.as_deref() != Some(texture.as_str()) {
+            if last_texture.as_deref() != Some(texture.as_str()) {
                 sprite.image = asset_server.load(&texture);
-                bullet.last_texture = Some(texture);
+                *last_texture = Some(texture);
             }
         }
 
         let mut should_delete = false;
-        if let Some(expr) = &bullet.delete_expr {
-            if let Ok(value) = expr.eval_with_context(&bullet.context) {
+        if let Some(expr) = delete_expr {
+            if let Ok(value) = expr.eval_with_context(context) {
                 if let Some(result) = value_to_bool(&value) {
                     should_delete = result;
                 }
             }
-        } else if let Some(value) = bullet.context.get_value("delete") {
+        } else if let Some(value) = context.get_value("delete") {
             if let Some(result) = value_to_bool(&value) {
                 should_delete = result;
             }
