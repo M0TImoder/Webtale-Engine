@@ -3,6 +3,7 @@ use bevy::sprite::Anchor;
 use rustpython_vm::builtins::PyDictRef;
 use rustpython_vm::compiler::Mode;
 use rustpython_vm::scope::Scope;
+use rustpython_vm::PyObjectRef;
 use std::collections::HashMap;
 use crate::components::*;
 use crate::constants::*;
@@ -189,25 +190,66 @@ fn load_python_game_data(
             Some(scope)
         };
 
-        let item_script = match python_scripts::get_item_script(project_name) {
+        let properties_script = match python_scripts::get_properties_script(project_name) {
             Some(script) => script,
             None => {
-                println!("Warning: Could not load projects/{}/properties/item.py", project_name);
+                println!("Warning: Could not load projects/{}/properties/properties.py", project_name);
                 String::new()
             }
         };
-        if !item_script.is_empty() {
-            if let Some(scope) = run_script(&item_script, "item.py") {
-                match scope.globals.get_item_opt("getItemData", vm) {
-                    Ok(Some(func)) => match vm.invoke(&func, ()) {
-                        Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
-                            Ok(dict) => {
-                                for (key, value) in &dict {
+        if !properties_script.is_empty() {
+            if let Some(scope) = run_script(&properties_script, "properties.py") {
+                let mut properties_class: Option<PyObjectRef> = None;
+                for (_, value) in &scope.globals {
+                    let flag = match value.get_attr("__is_properties__", vm) {
+                        Ok(attr) => match attr.try_into_value::<bool>(vm) {
+                            Ok(result) => result,
+                            Err(_) => false,
+                        },
+                        Err(_) => false,
+                    };
+                    if flag {
+                        properties_class = Some(value.clone());
+                        break;
+                    }
+                }
+                if properties_class.is_none() {
+                    match scope.globals.get_item_opt("GameData", vm) {
+                        Ok(Some(value)) => properties_class = Some(value),
+                        Ok(None) => println!("Warning: properties missing GameData"),
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: properties lookup {:?}", err);
+                        }
+                    }
+                }
+                if let Some(class_obj) = properties_class {
+                    let read_i32_any = |dict: &PyDictRef, keys: &[&str]| -> Option<i32> {
+                        for key in keys {
+                            if let Some(value) = read_option_i32(vm, dict, key, "properties", false) {
+                                return Some(value);
+                            }
+                        }
+                        None
+                    };
+                    let read_f32_any = |dict: &PyDictRef, keys: &[&str]| -> Option<f32> {
+                        for key in keys {
+                            if let Some(value) = read_option_f32(vm, dict, key, "properties", false) {
+                                return Some(value);
+                            }
+                        }
+                        None
+                    };
+
+                    match class_obj.get_attr("items", vm) {
+                        Ok(items_obj) => match items_obj.try_into_value::<PyDictRef>(vm) {
+                            Ok(items_dict) => {
+                                for (key, value) in &items_dict {
                                     let item_name: String = match key.try_into_value(vm) {
                                         Ok(name) => name,
                                         Err(err) => {
                                             vm.print_exception(err.clone());
-                                            println!("Warning: itemData key {:?}", err);
+                                            println!("Warning: properties item key {:?}", err);
                                             continue;
                                         }
                                     };
@@ -215,95 +257,108 @@ fn load_python_game_data(
                                         Ok(data) => data,
                                         Err(err) => {
                                             vm.print_exception(err.clone());
-                                            println!("Warning: itemData value {:?}", err);
+                                            println!("Warning: properties item value {:?}", err);
                                             continue;
                                         }
                                     };
-                                    let heal = read_option_i32(vm, &data, "heal", "itemData", true).unwrap_or(0);
-                                    let attack = read_option_i32(vm, &data, "attack", "itemData", true).unwrap_or(0);
-                                    let defense = read_option_i32(vm, &data, "defense", "itemData", true).unwrap_or(0);
-                                    let text = read_option_string(vm, &data, "text", "itemData", true).unwrap_or_default();
-
+                                    let heal = read_option_i32(vm, &data, "heal", "properties", false).unwrap_or(0);
+                                    let attack = read_option_i32(vm, &data, "attack", "properties", false).unwrap_or(0);
+                                    let defense = read_option_i32(vm, &data, "defense", "properties", false).unwrap_or(0);
+                                    let text = read_option_string(vm, &data, "text", "properties", false).unwrap_or_default();
                                     item_dictionary.0.insert(item_name, ItemInfo { heal_amount: heal, attack, defense, text });
                                 }
                             }
                             Err(err) => {
                                 vm.print_exception(err.clone());
-                                println!("Warning: itemData result {:?}", err);
+                                println!("Warning: properties items invalid");
                             }
                         },
                         Err(err) => {
                             vm.print_exception(err.clone());
-                            println!("Warning: itemData call {:?}", err);
+                            println!("Warning: properties items missing");
                         }
-                    },
-                    Ok(None) => println!("Warning: itemData missing getItemData"),
-                    Err(err) => {
-                        vm.print_exception(err.clone());
-                        println!("Warning: itemData lookup {:?}", err);
                     }
-                }
-            }
-        }
 
-        let player_status_script = match python_scripts::get_player_status_script(project_name) {
-            Some(script) => script,
-            None => {
-                println!("Warning: Could not load projects/{}/properties/playerStatus.py", project_name);
-                String::new()
-            }
-        };
-        if !player_status_script.is_empty() {
-            if let Some(scope) = run_script(&player_status_script, "playerStatus.py") {
-                match scope.globals.get_item_opt("getPlayerStatus", vm) {
-                    Ok(Some(func)) => match vm.invoke(&func, ()) {
-                        Ok(result) => match result.try_into_value::<PyDictRef>(vm) {
-                            Ok(dict) => {
-                                if let Some(name) = read_option_string(vm, &dict, "name", "playerStatus", true) {
-                                    player_state.name = name;
+                    match class_obj.get_attr("inventory", vm) {
+                        Ok(inv_obj) => match inv_obj.try_into_value::<PyDictRef>(vm) {
+                            Ok(inv_dict) => {
+                                if let Some(items) = read_option_vec_string(vm, &inv_dict, "items", "properties", false) {
+                                    player_state.inventory = items;
                                 }
-                                if let Some(lv) = read_option_i32(vm, &dict, "lv", "playerStatus", true) {
-                                    player_state.lv = lv;
-                                }
-                                if let Some(max_hp) = read_option_f32(vm, &dict, "maxHp", "playerStatus", true) {
-                                    player_state.max_hp = max_hp;
-                                }
-                                if let Some(hp) = read_option_f32(vm, &dict, "hp", "playerStatus", true) {
-                                    player_state.hp = hp;
-                                }
-                                if let Some(speed) = read_option_f32(vm, &dict, "speed", "playerStatus", true) {
-                                    player_state.speed = speed;
-                                }
-                                if let Some(attack) = read_option_f32(vm, &dict, "attack", "playerStatus", true) {
-                                    player_state.attack = attack;
-                                }
-                                if let Some(defense) = read_option_f32(vm, &dict, "defense", "playerStatus", true) {
-                                    player_state.defense = defense;
-                                }
-                                if let Some(inv_dur) = read_option_f32(vm, &dict, "invincibilityDuration", "playerStatus", true) {
-                                    player_state.invincibility_duration = inv_dur;
-                                }
-                                if let Some(inventory) = read_option_vec_string(vm, &dict, "inventory", "playerStatus", true) {
-                                    player_state.inventory = inventory;
-                                }
-                                if let Some(equipped_items) = read_option_vec_string(vm, &dict, "equippedItems", "playerStatus", true) {
-                                    player_state.equipped_items = equipped_items;
+                                match inv_dict.get_item_opt("equipment", vm) {
+                                    Ok(Some(equip_obj)) => match equip_obj.try_into_value::<PyDictRef>(vm) {
+                                        Ok(equip_dict) => {
+                                            if let Some(weapon) = read_option_string(vm, &equip_dict, "weapon", "properties", false) {
+                                                if !weapon.is_empty() {
+                                                    player_state.equipped_items.push(weapon);
+                                                }
+                                            }
+                                            if let Some(armor) = read_option_string(vm, &equip_dict, "armor", "properties", false) {
+                                                if !armor.is_empty() {
+                                                    player_state.equipped_items.push(armor);
+                                                }
+                                            }
+                                        }
+                                        Err(err) => {
+                                            vm.print_exception(err.clone());
+                                            println!("Warning: properties equipment invalid");
+                                        }
+                                    },
+                                    Ok(None) => {}
+                                    Err(err) => {
+                                        vm.print_exception(err.clone());
+                                        println!("Warning: properties equipment lookup {:?}", err);
+                                    }
                                 }
                             }
                             Err(err) => {
                                 vm.print_exception(err.clone());
-                                println!("Warning: playerStatus result {:?}", err);
+                                println!("Warning: properties inventory invalid");
                             }
                         },
                         Err(err) => {
                             vm.print_exception(err.clone());
-                            println!("Warning: playerStatus call {:?}", err);
+                            println!("Warning: properties inventory missing");
                         }
-                    },
-                    Ok(None) => println!("Warning: playerStatus missing getPlayerStatus"),
-                    Err(err) => {
-                        vm.print_exception(err.clone());
-                        println!("Warning: playerStatus lookup {:?}", err);
+                    }
+
+                    match class_obj.get_attr("status", vm) {
+                        Ok(status_obj) => match status_obj.try_into_value::<PyDictRef>(vm) {
+                            Ok(status_dict) => {
+                                if let Some(name) = read_option_string(vm, &status_dict, "name", "properties", false) {
+                                    player_state.name = name;
+                                }
+                                if let Some(lv) = read_i32_any(&status_dict, &["lv", "currentLevel"]) {
+                                    player_state.lv = lv;
+                                }
+                                if let Some(max_hp) = read_f32_any(&status_dict, &["maxHp", "maxHP"]) {
+                                    player_state.max_hp = max_hp;
+                                }
+                                if let Some(hp) = read_f32_any(&status_dict, &["hp", "currentHP"]) {
+                                    player_state.hp = hp;
+                                }
+                                if let Some(speed) = read_f32_any(&status_dict, &["speed"]) {
+                                    player_state.speed = speed;
+                                }
+                                if let Some(attack) = read_f32_any(&status_dict, &["attack"]) {
+                                    player_state.attack = attack;
+                                }
+                                if let Some(defense) = read_f32_any(&status_dict, &["defense"]) {
+                                    player_state.defense = defense;
+                                }
+                                if let Some(inv_dur) = read_f32_any(&status_dict, &["invincibilityDuration"]) {
+                                    player_state.invincibility_duration = inv_dur;
+                                }
+                            }
+                            Err(err) => {
+                                vm.print_exception(err.clone());
+                                println!("Warning: properties status invalid");
+                            }
+                        },
+                        Err(err) => {
+                            vm.print_exception(err.clone());
+                            println!("Warning: properties status missing");
+                        }
                     }
                 }
             }

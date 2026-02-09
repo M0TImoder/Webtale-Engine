@@ -24,6 +24,11 @@ pub fn get_player_status_script(project: &str) -> Option<String> {
     read_script(project_root(project).join("properties").join("playerStatus.py"))
 }
 
+// プロパティスクリプト
+pub fn get_properties_script(project: &str) -> Option<String> {
+    read_script(project_root(project).join("properties").join("properties.py"))
+}
+
 // 敵ステータススクリプト
 pub fn get_enemy_status_script(project: &str) -> Option<String> {
     read_script(project_root(project).join("properties").join("enemyStatus.py"))
