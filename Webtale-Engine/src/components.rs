@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 use rustpython_vm::PyObjectRef;
+use evalexpr::HashMapContext;
+use crate::resources::ExprAssignment;
 
 // クリーンアップタグ
 #[derive(Component)]
@@ -39,7 +41,7 @@ pub struct Typewriter {
 
 // 敵表示タグ
 #[derive(Component)] pub struct EnemyBody; 
-#[derive(Component)] pub struct EnemyHead { pub base_y: f32, pub timer: f32 }
+#[derive(Component)] pub struct EnemyHead { pub base_y: f32, pub timer: f32, pub sway_speed: f32, pub sway_amplitude: f32 }
 #[derive(Component)] pub struct ActCommands { pub commands: Vec<String> }
 #[derive(Component)] pub struct MenuTextItem { pub layer: i32, pub index: i32 }
 #[derive(Component)] pub struct MainDialogText;
@@ -65,6 +67,20 @@ pub struct LeapFrogBullet {
     pub velocity: Vec3,
     pub gravity: Vec3,
     pub damage: i32,
+    pub jump_speed: f32,
+    pub jump_angle: f32,
+    pub jump_texture: String,
+}
+
+// 式弾幕
+#[derive(Component)]
+pub struct ExpressionBullet {
+    pub context: HashMapContext,
+    pub update_exprs: Vec<ExprAssignment>,
+    pub delete_expr: Option<evalexpr::Node>,
+    pub texture_expr: Option<evalexpr::Node>,
+    pub damage: i32,
+    pub last_texture: Option<String>,
 }
 
 pub enum LeapFrogState {

@@ -48,7 +48,7 @@ def setNextPhase(name):
     _state["nextPhase"] = name
 
 def getState():
-    return _state
+    return {key: value for key, value in _state.items() if value is not None}
 
 def getInitialPhase():
     return "phase1"
