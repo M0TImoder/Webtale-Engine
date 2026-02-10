@@ -30,9 +30,14 @@ pub fn leapfrog_bullet_update(
     mut python_query: Query<(Entity, &mut Transform, &PythonBullet, &mut Sprite), (Without<ExpressionBullet>, Without<LeapFrogBullet>)>,
     mut rust_query: Query<(&mut Transform, &mut LeapFrogBullet, &mut Sprite), (Without<ExpressionBullet>, Without<PythonBullet>)>,
     mut expr_query: Query<(Entity, &mut Transform, &mut ExpressionBullet, &mut Sprite), (Without<LeapFrogBullet>, Without<PythonBullet>)>,
-    _scripts: Res<DanmakuScripts>,
+    scripts: Res<DanmakuScripts>,
+    soul_query: Query<&Transform, With<Soul>>,
 ) {
     let dt = time.delta_secs();
+    let (player_x, player_y) = match soul_query.get_single() {
+        Ok(transform) => (transform.translation.x, transform.translation.y),
+        Err(_) => (0.0, 0.0),
+    };
 
     for (entity, mut transform, mut bullet, mut sprite) in expr_query.iter_mut() {
         let (context, update_exprs, delete_expr, texture_expr, last_texture) = {
@@ -40,6 +45,10 @@ pub fn leapfrog_bullet_update(
             (context, update_exprs, delete_expr, texture_expr, last_texture)
         };
         let _ = context.set_value("dt".to_string(), Value::Float(dt as f64));
+        let _ = context.set_value("playerX".to_string(), Value::Float(player_x as f64));
+        let _ = context.set_value("playerY".to_string(), Value::Float(player_y as f64));
+        let _ = context.set_value("player_x".to_string(), Value::Float(player_x as f64));
+        let _ = context.set_value("player_y".to_string(), Value::Float(player_y as f64));
         let next_t = match context.get_value("t") {
             Some(value) => value_to_f64(&value).unwrap_or(0.0) + dt as f64,
             None => dt as f64,
@@ -125,7 +134,20 @@ pub fn leapfrog_bullet_update(
 
     let has_python = python_query.iter().next().is_some();
     if has_python {
+        let api_module = scripts.modules.get("api").cloned();
         python_runtime.interpreter.enter(|vm| {
+            if let Some(api_module) = api_module.as_ref() {
+                match api_module.get_attr("set_player_position", vm) {
+                    Ok(func) => {
+                        if let Err(err) = vm.invoke(&func, (player_x, player_y)) {
+                            vm.print_exception(err.clone());
+                        }
+                    }
+                    Err(err) => {
+                        vm.print_exception(err.clone());
+                    }
+                }
+            }
             for (entity, mut transform, bullet, mut sprite) in python_query.iter_mut() {
                 let bullet_obj = bullet.bullet_data.clone();
 
