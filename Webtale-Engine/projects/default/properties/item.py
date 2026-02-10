@@ -1,5 +1,10 @@
-def getItemData():
-    return {
+def item_data(cls):
+    cls.__is_item_data__ = True
+    return cls
+
+@item_data
+class ItemData:
+    items = {
         "Pie": {
             "heal": 99,
             "attack": 0,
@@ -25,3 +30,6 @@ def getItemData():
             "text": "Increased your power!"
         }
     }
+
+def getItemData():
+    return ItemData.items

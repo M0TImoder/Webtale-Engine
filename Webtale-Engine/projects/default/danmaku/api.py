@@ -1,6 +1,11 @@
 import math
 import random
 
+def danmaku_api(cls):
+    cls.__is_danmaku_api__ = True
+    return cls
+
+@danmaku_api
 class Bullet:
     def __init__(self):
         self.x = 0.0
