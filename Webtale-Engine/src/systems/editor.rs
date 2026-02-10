@@ -16,16 +16,32 @@ pub fn editor_ui_system(
 ) {
     let Ok(editor_entity) = window_query.get_single() else { return };
 
-    let _battle_texture_id = contexts.add_image(preview_texture.0.clone());
+    let battle_texture_id = contexts.add_image(preview_texture.0.clone());
     let danmaku_texture_id = contexts.add_image(danmaku_preview_texture.0.clone());
     let ctx = contexts.ctx_for_entity_mut(editor_entity);
 
+    if !editor_state.font_configured {
+        let mut fonts = egui::FontDefinitions::default();
+        fonts.font_data.insert(
+            "noto_sans_jp".to_string(),
+            egui::FontData::from_static(include_bytes!("../../assets/font/NotoSansJP-VariableFont_wght.ttf")),
+        );
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "noto_sans_jp".to_string());
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .insert(0, "noto_sans_jp".to_string());
+        ctx.set_fonts(fonts);
+        editor_state.font_configured = true;
+    }
+
     for mut vis in bg_sprite_query.iter_mut() {
-        if editor_state.current_tab == EditorTab::Battle {
-            *vis = Visibility::Inherited;
-        } else {
-            *vis = Visibility::Hidden;
-        }
+        *vis = Visibility::Hidden;
     }
 
     egui::TopBottomPanel::top("editor_tabs").show(ctx, |ui| {
@@ -34,6 +50,18 @@ pub fn editor_ui_system(
             ui.selectable_value(&mut editor_state.current_tab, EditorTab::DanmakuPreview, "Danmaku Preview");
         });
     });
+
+    egui::SidePanel::left("editor_left")
+        .default_width(200.0)
+        .show(ctx, |ui| {
+            ui.allocate_space(ui.available_size());
+        });
+
+    egui::TopBottomPanel::bottom("editor_bottom")
+        .default_height(120.0)
+        .show(ctx, |ui| {
+            ui.allocate_space(ui.available_size());
+        });
 
     egui::SidePanel::right("editor_panel")
         .default_width(300.0)
@@ -107,34 +135,33 @@ pub fn editor_ui_system(
             ui.allocate_space(ui.available_size());
         });
 
-    if editor_state.current_tab == EditorTab::DanmakuPreview {
-        egui::Area::new("danmaku_preview_area".into())
-            .fixed_pos(egui::Pos2::new(320.0, 45.0))
-            .order(egui::Order::Background)
-            .show(ctx, |ui| {
-                let size = egui::Vec2::new(640.0, 480.0);
-                let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(danmaku_texture_id, size)));
+    egui::CentralPanel::default()
+        .frame(egui::Frame::none())
+        .show(ctx, |ui| {
+            let size = egui::Vec2::new(640.0, 480.0);
+            if editor_state.current_tab == EditorTab::Battle {
+                ui.centered_and_justified(|ui| {
+                    ui.add(egui::Image::new(egui::load::SizedTexture::new(battle_texture_id, size)));
+                });
+            } else if editor_state.current_tab == EditorTab::DanmakuPreview {
+                ui.centered_and_justified(|ui| {
+                    let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(danmaku_texture_id, size)));
+                    if response.clicked() || response.dragged() {
+                        if let Some(pos) = response.interact_pointer_pos() {
+                            let image_rect = response.rect;
+                            let rel_x = pos.x - image_rect.min.x;
+                            let rel_y = pos.y - image_rect.min.y;
 
-                 if response.clicked() || response.dragged() {
-                     if let Some(pos) = response.interact_pointer_pos() {
-                         
-                         let image_rect = response.rect;
-                         let rel_x = pos.x - image_rect.min.x;
-                         let rel_y = pos.y - image_rect.min.y;
-                         
-                         let uv_x = rel_x / image_rect.width();
-                         let uv_y = rel_y / image_rect.height();
-                         
-                         let world_x = (uv_x - 0.5) * 640.0;
-                         let world_y = (0.5 - uv_y) * 480.0;
-                         
-                         println!("Preview Click: World({}, {})", world_x, world_y);
-                     }
-                 }
-            });
+                            let uv_x = rel_x / image_rect.width();
+                            let uv_y = rel_y / image_rect.height();
 
-        egui::CentralPanel::default()
-            .frame(egui::Frame::none())
-            .show(ctx, |_ui| {});
-    }
+                            let world_x = (uv_x - 0.5) * 640.0;
+                            let world_y = (0.5 - uv_y) * 480.0;
+
+                            println!("Preview Click: World({}, {})", world_x, world_y);
+                        }
+                    }
+                });
+            }
+        });
 }

@@ -226,6 +226,7 @@ pub enum EditorTab {
 #[derive(Resource, Default)]
 pub struct EditorState {
     pub current_tab: EditorTab,
+    pub font_configured: bool,
 }
 
 // エディタプレビュー
