@@ -31,7 +31,7 @@ pub fn leapfrog_bullet_update(
     mut rust_query: Query<(&mut Transform, &mut LeapFrogBullet, &mut Sprite), (Without<ExpressionBullet>, Without<PythonBullet>)>,
     mut expr_query: Query<(Entity, &mut Transform, &mut ExpressionBullet, &mut Sprite), (Without<LeapFrogBullet>, Without<PythonBullet>)>,
     scripts: Res<DanmakuScripts>,
-    soul_query: Query<&Transform, With<Soul>>,
+    soul_query: Query<&Transform, (With<Soul>, Without<PythonBullet>, Without<ExpressionBullet>, Without<LeapFrogBullet>)>,
 ) {
     let dt = time.delta_secs();
     let (player_x, player_y) = match soul_query.get_single() {

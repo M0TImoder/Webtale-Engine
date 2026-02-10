@@ -1,10 +1,10 @@
 import phase_api as phase
 
-def phase(cls):
+def phase_script(cls):
     cls.__is_phase__ = True
     return cls
 
-@phase
+@phase_script
 class PhaseExample:
     def update(self, context):
         turn = phase.getTurn()
