@@ -240,7 +240,29 @@ pub fn handle_global_input(
     mut egui_contexts: EguiContexts,
     mut textures: GlobalInputTextures,
     mut events: GlobalInputEvents,
+    mut game_run_state: ResMut<GameRunState>,
 ) {
+    let mut reset_game = || {
+        for entity in cleanup_query.iter() {
+            commands.entity(entity).despawn_recursive();
+        }
+
+        commands.insert_resource(BattleBox {
+            current: Rect::new(32.0, 250.0, 602.0, 385.0),
+            target: Rect::new(32.0, 250.0, 602.0, 385.0),
+        });
+
+        danmaku_scripts.modules.clear();
+        danmaku_scripts.rust_specs.clear();
+        menu_render_cache.key = None;
+        spawn_game_objects(&mut commands, &asset_server, &game_fonts, &python_runtime);
+    };
+
+    if game_run_state.reset_requested {
+        game_run_state.reset_requested = false;
+        reset_game();
+    }
+
     for close_requested in events.window_close_requested_reader.read() {
         if let Ok(editor_window) = open_editor_window_query.get_single() {
             if close_requested.window == editor_window {
@@ -294,19 +316,7 @@ pub fn handle_global_input(
         }
 
         if !is_typing {
-            for entity in cleanup_query.iter() {
-                commands.entity(entity).despawn_recursive();
-            }
-
-            commands.insert_resource(BattleBox {
-                current: Rect::new(32.0, 250.0, 602.0, 385.0),
-                target: Rect::new(32.0, 250.0, 602.0, 385.0),
-            });
-
-            danmaku_scripts.modules.clear();
-            danmaku_scripts.rust_specs.clear();
-            menu_render_cache.key = None;
-            spawn_game_objects(&mut commands, &asset_server, &game_fonts, &python_runtime);
+            reset_game();
         }
     }
 
@@ -348,7 +358,7 @@ pub fn menu_input_system(
     }
 
     if let Some(state) = editor_state {
-        if state.current_tab == EditorTab::DanmakuPreview {
+        if state.preview_active {
             return;
         }
     }

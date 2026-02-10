@@ -13,6 +13,10 @@ use constants::*;
 use resources::*;
 use systems::*;
 
+fn game_running(state: Res<GameRunState>) -> bool {
+    state.running
+}
+
 // アプリ起動
 fn main() {
     App::new()
@@ -52,6 +56,7 @@ fn main() {
         .init_resource::<EditorPreviewTexture>()
         .init_resource::<DanmakuPreviewTexture>()
         .init_resource::<DanmakuScripts>()
+        .init_resource::<GameRunState>()
         // メニュー描画キャッシュ
         .init_resource::<MenuRenderCache>()
         // Python実行環境
@@ -64,17 +69,19 @@ fn main() {
         // 更新システム
         .add_systems(Update, input::handle_global_input)
         .add_systems(Update, setup::camera_scaling_system)
-        .add_systems(Update, input::menu_input_system)
-        .add_systems(Update, ui::menu_render_system)
-        .add_systems(Update, player::soul_position_sync)
-        .add_systems(Update, player::soul_combat_movement)
-        .add_systems(Update, ui::update_box_size)
         .add_systems(Update, ui::draw_battle_box)
         .add_systems(Update, ui::draw_ui_status)
-        .add_systems(Update, ui::update_button_sprites)
-        .add_systems(Update, ui::animate_text)
-        .add_systems(Update, ui::animate_enemy_head)
         .add_systems(Update, editor::editor_ui_system)
+        .add_systems(Update, (
+            input::menu_input_system,
+            ui::menu_render_system,
+            player::soul_position_sync,
+            player::soul_combat_movement,
+            ui::update_box_size,
+            ui::update_button_sprites,
+            ui::animate_text,
+            ui::animate_enemy_head,
+        ).run_if(game_running))
         // 戦闘システム
         .add_systems(Update, (
             combat::battle_flow_control,
@@ -85,7 +92,7 @@ fn main() {
             combat::enemy_hp_bar_update,    
             combat::vaporize_enemy_system, 
             combat::dust_particle_update,
-        ))
+        ).run_if(game_running))
         .add_systems(Update, (
             combat::leapfrog_bullet_update,
             combat::combat_turn_manager,
@@ -94,6 +101,6 @@ fn main() {
             combat::heart_defeated_update,
             combat::heart_shard_update,
             combat::game_over_sequence_update,
-        ))
+        ).run_if(game_running))
         .run();
 }

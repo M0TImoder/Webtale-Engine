@@ -8,20 +8,30 @@ use crate::constants::*;
 pub fn soul_position_sync(
     combat_state: Res<CombatState>,
     menu_state: Res<MenuState>,
-    mut soul_query: Query<&mut Transform, With<Soul>>,
+    player_state: Res<PlayerState>,
+    mut soul_query: Query<(&mut Transform, &mut Visibility), With<Soul>>,
 ) {
     if (combat_state.mn_fight != MainFightState::Menu && combat_state.mn_fight != MainFightState::EnemyAttack) || combat_state.my_fight != MessageFightState::None { 
-        if let Ok(mut t) = soul_query.get_single_mut() {
+        if let Ok((mut t, mut vis)) = soul_query.get_single_mut() {
             t.translation = gml_to_bevy(-200.0, 0.0); 
+            *vis = Visibility::Hidden;
         }
         return; 
     }
     
     if combat_state.mn_fight == MainFightState::EnemyAttack {
+        if let Ok((_t, mut vis)) = soul_query.get_single_mut() {
+            if player_state.invincibility_timer <= 0.0 {
+                *vis = Visibility::Visible;
+            }
+        }
         return;
     }
 
-    let mut transform = soul_query.single_mut();
+    let (mut transform, mut vis) = soul_query.single_mut();
+    if player_state.invincibility_timer <= 0.0 {
+        *vis = Visibility::Visible;
+    }
     let layer = menu_state.menu_layer;
     
     let text_start_x = 68.0; 
@@ -79,7 +89,7 @@ pub fn soul_combat_movement(
     }
 
     if let Some(state) = editor_state {
-        if state.current_tab == EditorTab::DanmakuPreview {
+        if state.preview_active {
             return;
         }
     }

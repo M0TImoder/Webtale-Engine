@@ -220,6 +220,9 @@ pub enum EditorTab {
     #[default]
     Battle,
     DanmakuPreview,
+    Settings,
+    LeftPane,
+    BottomPane,
 }
 
 // エディタ状態
@@ -227,6 +230,15 @@ pub enum EditorTab {
 pub struct EditorState {
     pub current_tab: EditorTab,
     pub font_configured: bool,
+    pub preview_active: bool,
+    pub controls_pinned: bool,
+}
+
+// ゲーム実行状態
+#[derive(Resource, Default)]
+pub struct GameRunState {
+    pub running: bool,
+    pub reset_requested: bool,
 }
 
 // エディタプレビュー

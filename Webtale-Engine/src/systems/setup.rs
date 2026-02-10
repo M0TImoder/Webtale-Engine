@@ -649,6 +649,7 @@ fn spawn_soul(commands: &mut Commands, asset_server: &AssetServer) {
         SpriteBundle {
             sprite: Sprite { image: asset_server.load("texture/heart/spr_heart_0.png"), color: Color::WHITE, custom_size: Some(Vec2::new(16.0, 16.0)), ..default() },
             transform: Transform::from_translation(gml_to_bevy(0.0, 0.0) + Vec3::new(0.0, 0.0, Z_SOUL)),
+            visibility: Visibility::Hidden,
             ..default()
         },
         Soul,
