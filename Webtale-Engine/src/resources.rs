@@ -4,7 +4,8 @@ use rustpython_vm::function::ArgIntoFloat;
 use rustpython_vm::Interpreter;
 use rustpython_vm::PyObjectRef;
 use evalexpr::Node;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 // アイテム情報
 #[derive(Clone, Debug)]
@@ -232,6 +233,38 @@ pub struct EditorState {
     pub font_configured: bool,
     pub preview_active: bool,
     pub controls_pinned: bool,
+}
+
+// プロジェクトブラウザ状態
+#[derive(Resource)]
+pub struct ProjectBrowserState {
+    pub current_project: Option<PathBuf>,
+    pub selected_folder: Option<PathBuf>,
+    pub selected_file: Option<PathBuf>,
+    pub renaming_file: Option<PathBuf>,
+    pub rename_buffer: String,
+    pub rename_extension: String,
+    pub rename_focus_requested: bool,
+    pub recent_projects: Vec<PathBuf>,
+    pub expanded_folders: HashSet<PathBuf>,
+    pub tree_width: f32,
+}
+
+impl Default for ProjectBrowserState {
+    fn default() -> Self {
+        Self {
+            current_project: None,
+            selected_folder: None,
+            selected_file: None,
+            renaming_file: None,
+            rename_buffer: String::new(),
+            rename_extension: String::new(),
+            rename_focus_requested: false,
+            recent_projects: Vec::new(),
+            expanded_folders: HashSet::new(),
+            tree_width: 200.0,
+        }
+    }
 }
 
 // ゲーム実行状態

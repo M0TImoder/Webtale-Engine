@@ -53,6 +53,7 @@ fn main() {
         })
         // エディタリソース
         .init_resource::<EditorState>()
+        .init_resource::<ProjectBrowserState>()
         .init_resource::<EditorPreviewTexture>()
         .init_resource::<DanmakuPreviewTexture>()
         .init_resource::<DanmakuScripts>()
